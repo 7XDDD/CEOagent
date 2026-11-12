@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}{{ record.project_name }} · 项目详情{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{{ record.project_name }}</h1>
+    <div class="page-desc">{{ record.project_code }} · {{ record.project_type }} · {{ record.status }}</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/md/project">返回项目列表</a>
+    <a class="btn btn-primary" href="/md/project/{{ record.id }}/edit">编辑项目</a>
+  </div>
+</div>
+
+<div class="card card-pad">
+  <div class="detail-grid">
+    <div class="detail-item"><div class="k">项目编码</div><div class="v">{{ record.project_code }}</div></div>
+    <div class="detail-item"><div class="k">客户</div><div class="v">{{ record.customer_name or '' }}</div></div>
+    <div class="detail-item"><div class="k">项目经理</div><div class="v">{{ record.pm_name or '' }}</div></div>
+    <div class="detail-item"><div class="k">销售负责人</div><div class="v">{{ record.sales_name or '' }}</div></div>
+    <div class="detail-item"><div class="k">所属组织</div><div class="v">{{ record.org_name or '' }}</div></div>
+    <div class="detail-item"><div class="k">项目状态</div><div class="v">{{ record.status }} · {{ record.progress }}%</div></div>
+    <div class="detail-item"><div class="k">计划周期</div><div class="v">{{ record.planned_start_date or '' }} ~ {{ record.planned_end_date or '' }}</div></div>
+    <div class="detail-item"><div class="k">合同金额</div><div class="v">{{ "{:,.2f}".format(record.contract_amount or 0) }} 元</div></div>
+    <div class="detail-item"><div class="k">预算金额</div><div class="v">{{ "{:,.2f}".format(record.budget_amount or 0) }} 元</div></div>
+    <div class="detail-item"><div class="k">实际成本</div><div class="v">{{ "{:,.2f}".format(record.actual_cost or 0) }} 元</div></div>
+    <div class="detail-item"><div class="k">成本偏差</div><div class="v">{{ "{:,.2f}".format(record.cost_variance or 0) }} 元</div></div>
+    <div class="detail-item"><div class="k">结算模式</div><div class="v">{{ record.settlement_mode }}</div></div>
+  </div>
+</div>
+
+<div class="card card-pad" style="margin-top:18px">
+  <div class="section-head">
+    <div><h2 class="card-title">项目成员</h2><p class="card-sub">项目成员、角色、投入比例；后续工时和结算从这里取数。</p></div>
+    <a class="btn btn-primary btn-sm" href="/md/project_member/new?project_id={{ record.id }}">+ 新增成员</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>工号</th><th>姓名</th><th>项目角色</th><th>工时性质</th><th>投入比例</th><th>加入日期</th><th>负责人</th><th>状态</th><th class="right">操作</th></tr></thead>
+      <tbody>
+      {% for m in members %}
+        <tr>
+          <td>{{ m.job_number or '' }}</td>
+          <td><b>{{ m.member_name or '' }}</b></td>
+          <td>{{ m.role_in_project }}</td>
+          <td>{% if m.work_nature == 'SETTLE' %}<span class="badge badge-green">结算</span>{% else %}<span class="badge badge-gray">不结算</span>{% endif %}</td>
+          <td>{{ m.allocation_rate or 0 }}%</td>
+          <td>{{ m.join_date or '' }}</td>
+          <td>{% if m.is_manager %}<span class="badge badge-blue">是</span>{% else %}否{% endif %}</td>
+          <td>{{ m.status }}</td>
+          <td class="right">
+            <div class="actions" style="justify-content:flex-end">
+              <a class="btn btn-ghost btn-sm" href="/md/project_member/{{ m.id }}/edit">编辑</a>
+              <form method="post" action="/md/project_member/{{ m.id }}/delete" onsubmit="return confirm('确认删除项目成员？');" style="display:inline"><button class="btn btn-danger btn-sm">删除</button></form>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9"><div class="empty">暂无项目成员</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card card-pad" style="margin-top:18px">
+  <div class="section-head">
+    <div><h2 class="card-title">关联合同</h2><p class="card-sub">项目与合同的多对多关系。</p></div>
+    <a class="btn btn-ghost btn-sm" href="/md/project_contract/new?project_id={{ record.id }}">+ 关联合同</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>合同编号</th><th>合同名称</th><th>合同金额</th><th>签约状态</th><th>执行状态</th></tr></thead>
+      <tbody>
+      {% for link, c in links %}
+        <tr><td><a href="/detail/contract/{{ c.id }}">{{ c.contract_no }}</a></td><td>{{ c.contract_name }}</td><td>{{ "{:,.2f}".format(c.contract_amount or 0) }}</td><td>{{ c.sign_status }}</td><td>{{ c.execution_status }}</td></tr>
+      {% else %}
+        <tr><td colspan="5"><div class="empty">暂无关联合同</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

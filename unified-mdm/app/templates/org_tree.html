@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}组织架构 · {{ app_name }}{% endblock %}
+{% block content %}
+{% macro render_node(node, level) %}
+<li>
+  <details {% if level < 2 %}open{% endif %}>
+    <summary>
+      <span class="node-name">{{ node.org_name }}</span>
+      <span class="node-meta">{{ node.org_code }} · {{ node.org_type }}</span>
+      {% if node.manager_name %}<span class="badge badge-blue">{{ node.manager_name }}</span>{% endif %}
+      {% if node.status == 1 %}<span class="badge badge-green">启用</span>{% else %}<span class="badge badge-gray">停用</span>{% endif %}
+      <span class="node-actions">
+        <a class="btn btn-ghost btn-sm" href="/md/org/new?parent_id={{ node.id }}">+ 子组织</a>
+        <a class="btn btn-ghost btn-sm" href="/md/org/{{ node.id }}/edit">编辑</a>
+        <form method="post" action="/md/org/{{ node.id }}/delete" onsubmit="return confirm('确认删除组织 {{ node.org_name }}？');" style="display:inline">
+          <button class="btn btn-danger btn-sm" type="submit">删除</button>
+        </form>
+      </span>
+    </summary>
+    {% set kids = children.get(node.id, []) %}
+    {% if kids %}
+    <div class="children">
+      <ul class="tree">
+        {% for kid in kids %}{{ render_node(kid, level + 1) }}{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </details>
+</li>
+{% endmacro %}
+
+<div class="page-head">
+  <div>
+    <h1 class="page-title">组织架构</h1>
+    <div class="page-desc">集团—公司—部门—产品线统一组织树；组织是数据权限、成本归集和预算归属的根。</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/md/org">列表视图</a>
+    <a class="btn btn-primary" href="/md/org/new?parent_id=0">+ 新增根组织</a>
+  </div>
+</div>
+
+<div class="card card-pad">
+  <div class="toolbar">
+    <span class="badge badge-blue">共 {{ orgs|length }} 个组织节点</span>
+    <span class="muted">点击组织可展开下级；负责人来自员工主数据。</span>
+  </div>
+  {% if roots %}
+  <ul class="tree">
+    {% for node in roots %}{{ render_node(node, 1) }}{% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty"><div class="empty-ico">🏛️</div>暂无组织数据，请先新增根组织</div>
+  {% endif %}
+</div>
+{% endblock %}

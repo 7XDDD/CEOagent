@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}{{ record.contract_name }} · 合同详情{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{{ record.contract_name }}</h1>
+    <div class="page-desc">{{ record.contract_no }}{% if record.sub_contract_no %} · {{ record.sub_contract_no }}{% endif %} · {{ record.contract_category }}</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/md/contract">返回合同列表</a>
+    <a class="btn btn-primary" href="/md/contract/{{ record.id }}/edit">编辑合同</a>
+  </div>
+</div>
+
+<div class="card card-pad">
+  <div class="detail-grid">
+    <div class="detail-item"><div class="k">合同编号</div><div class="v">{{ record.contract_no }}</div></div>
+    <div class="detail-item"><div class="k">客户</div><div class="v">{{ record.customer_name or '' }}</div></div>
+    <div class="detail-item"><div class="k">合同类型</div><div class="v">{{ record.contract_type_name or '' }}</div></div>
+    <div class="detail-item"><div class="k">合同金额</div><div class="v">{{ "{:,.2f}".format(record.contract_amount or 0) }} {{ record.currency }}</div></div>
+    <div class="detail-item"><div class="k">税率</div><div class="v">{{ record.tax_rate or 0 }}</div></div>
+    <div class="detail-item"><div class="k">签订日期</div><div class="v">{{ record.sign_date or '' }}</div></div>
+    <div class="detail-item"><div class="k">合同周期</div><div class="v">{{ record.start_date or '' }} ~ {{ record.end_date or '' }}</div></div>
+    <div class="detail-item"><div class="k">签约状态</div><div class="v">{{ record.sign_status }}</div></div>
+    <div class="detail-item"><div class="k">执行状态</div><div class="v">{{ record.execution_status }}</div></div>
+    <div class="detail-item"><div class="k">开票状态</div><div class="v">{{ record.invoice_status }}</div></div>
+    <div class="detail-item"><div class="k">收款状态</div><div class="v">{{ record.payment_status }}</div></div>
+    <div class="detail-item"><div class="k">合同负责人</div><div class="v">{{ record.manager_name or '' }}</div></div>
+  </div>
+</div>
+
+<div class="card card-pad" style="margin-top:18px">
+  <div class="section-head">
+    <div><h2 class="card-title">合同里程碑 / 收付款计划</h2><p class="card-sub">后续开票、回款、预算达成都以里程碑为锚点。</p></div>
+    <a class="btn btn-primary btn-sm" href="/md/contract_milestone/new?contract_id={{ record.id }}">+ 新增里程碑</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>编码</th><th>里程碑</th><th>类型</th><th>收款比例</th><th>金额</th><th>计划开票</th><th>开票状态</th><th>预计回款</th><th>收款状态</th><th class="right">操作</th></tr></thead>
+      <tbody>
+      {% for m in milestones %}
+        <tr>
+          <td>{{ m.milestone_code or '' }}</td>
+          <td><b>{{ m.milestone_name }}</b></td>
+          <td>{{ m.milestone_type }}</td>
+          <td>{{ m.payment_ratio or 0 }}</td>
+          <td>{{ "{:,.2f}".format(m.milestone_amount or 0) }}</td>
+          <td>{{ m.plan_date or '' }}</td>
+          <td>
+            {% if m.invoice_status == 'INVOICED' %}<span class="badge badge-green">已开票</span>
+            {% elif m.invoice_status == 'PARTIAL' %}<span class="badge badge-amber">部分开票</span>
+            {% else %}<span class="badge badge-gray">未开票</span>{% endif %}
+          </td>
+          <td>{{ m.expected_payment_date or '' }}</td>
+          <td>
+            {% if m.payment_status == 'PAID' %}<span class="badge badge-green">已收款</span>
+            {% elif m.payment_status == 'PARTIAL' %}<span class="badge badge-amber">部分收款</span>
+            {% else %}<span class="badge badge-gray">未收款</span>{% endif %}
+          </td>
+          <td class="right">
+            <div class="actions" style="justify-content:flex-end">
+              <a class="btn btn-ghost btn-sm" href="/md/contract_milestone/{{ m.id }}/edit">编辑</a>
+              <form method="post" action="/md/contract_milestone/{{ m.id }}/delete" onsubmit="return confirm('确认删除里程碑？');" style="display:inline"><button class="btn btn-danger btn-sm">删除</button></form>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="10"><div class="empty">暂无里程碑</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card card-pad" style="margin-top:18px">
+  <div class="section-head">
+    <div><h2 class="card-title">关联项目</h2><p class="card-sub">合同与项目关系。</p></div>
+    <a class="btn btn-ghost btn-sm" href="/md/project_contract/new?contract_id={{ record.id }}">+ 关联项目</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目编码</th><th>项目名称</th><th>项目经理</th><th>项目状态</th><th>进度</th></tr></thead>
+      <tbody>
+      {% for link, p in links %}
+        <tr><td><a href="/detail/project/{{ p.id }}">{{ p.project_code }}</a></td><td>{{ p.project_name }}</td><td>{{ p.pm_name or '' }}</td><td>{{ p.status }}</td><td>{{ p.progress }}%</td></tr>
+      {% else %}
+        <tr><td colspan="5"><div class="empty">暂无关联项目</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

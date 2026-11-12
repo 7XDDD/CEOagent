@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>登录 · 链宇大一统平台</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-brand">链宇 · 大一统平台</div>
+    <div class="login-sub">平台底座与主数据管理 · 统一账号登录</div>
+    {% if error %}
+    <div class="flash error">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="/login">
+      <input type="hidden" name="next" value="{{ next }}"/>
+      <div class="field">
+        <label>登录账号</label>
+        <input class="input" name="username" placeholder="请输入账号" autofocus required/>
+      </div>
+      <div class="field">
+        <label>登录密码</label>
+        <input class="input" type="password" name="password" placeholder="请输入密码" required/>
+      </div>
+      <button class="btn btn-primary" type="submit">登录系统</button>
+    </form>
+    <div class="login-foot">一个门户 · 一套账号 · 一套主数据 · 一条业务链</div>
+  </div>
+</div>
+</body>
+</html>

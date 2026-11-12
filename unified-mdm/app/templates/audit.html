@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}审计日志 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">审计日志</h1>
+    <div class="page-desc">登录、新增、编辑、删除等操作全程留痕。</div>
+  </div>
+</div>
+<div class="card card-pad">
+  <div class="toolbar"><span class="badge badge-blue">共 {{ total }} 条</span><span class="muted">按时间倒序</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>时间</th><th>用户</th><th>动作</th><th>对象</th><th>对象ID</th><th>说明</th><th>IP</th></tr></thead>
+      <tbody>
+      {% for log in logs %}
+        <tr>
+          <td class="muted">{{ log.create_time.strftime('%Y-%m-%d %H:%M:%S') if log.create_time else '' }}</td>
+          <td>{{ log.username }}</td>
+          <td><span class="badge badge-gray">{{ log.action }}</span></td>
+          <td>{{ log.entity }}</td>
+          <td>{{ log.entity_id or '' }}</td>
+          <td>{{ log.detail or '' }}</td>
+          <td class="mono">{{ log.ip or '' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7"><div class="empty">暂无日志</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if pages > 1 %}
+  <div class="pagination">
+    <div>第 {{ page }} / {{ pages }} 页</div>
+    <div class="pages">
+      {% if page > 1 %}<a href="/audit?page={{ page - 1 }}">上一页</a>{% endif %}
+      {% for p in range(1, pages + 1) %}
+        {% if p == page %}<span class="current">{{ p }}</span>{% else %}<a href="/audit?page={{ p }}">{{ p }}</a>{% endif %}
+      {% endfor %}
+      {% if page < pages %}<a href="/audit?page={{ page + 1 }}">下一页</a>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

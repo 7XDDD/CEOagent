@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{{ ent.label }} · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{{ ent.label }}</h1>
+    <div class="page-desc">{{ ent.description }}</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-primary" href="/md/{{ ent.key }}/new{% if parent_field and parent_id %}?{{ parent_field }}={{ parent_id }}{% endif %}">+ 新增{{ ent.label }}</a>
+  </div>
+</div>
+
+{% if message %}<div class="flash">{{ message }}</div>{% endif %}
+
+<div class="card card-pad">
+  <div class="toolbar">
+    <form class="search" method="get" action="/md/{{ ent.key }}">
+      {% if parent_field and parent_id %}
+      <input type="hidden" name="{{ parent_field }}" value="{{ parent_id }}"/>
+      {% endif %}
+      <input class="input" name="q" value="{{ q }}" placeholder="搜索{{ ent.label }}编码 / 名称 / 关键字"/>
+      <button class="btn btn-ghost" type="submit">搜索</button>
+      {% if q %}<a class="btn btn-ghost" href="/md/{{ ent.key }}">清空</a>{% endif %}
+    </form>
+    <span class="muted">共 {{ total }} 条</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          {% for col in columns %}<th>{{ col.label }}</th>{% endfor %}
+          <th class="right">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          {% for col in columns %}<td>{{ row.cells[col.name] }}</td>{% endfor %}
+          <td class="right">
+            <div class="actions" style="justify-content:flex-end">
+              {% if ent.detail %}<a class="btn btn-ghost btn-sm" href="/detail/{{ ent.key }}/{{ row.id }}">查看</a>{% endif %}
+              <a class="btn btn-ghost btn-sm" href="/md/{{ ent.key }}/{{ row.id }}/edit">编辑</a>
+              <form method="post" action="/md/{{ ent.key }}/{{ row.id }}/delete" onsubmit="return confirm('确认删除这条{{ ent.label }}？');" style="display:inline">
+                <button class="btn btn-danger btn-sm" type="submit">删除</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="{{ columns|length + 1 }}"><div class="empty"><div class="empty-ico">📭</div>暂无{{ ent.label }}数据</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pages > 1 %}
+  <div class="pagination">
+    <div>第 {{ page }} / {{ pages }} 页</div>
+    <div class="pages">
+      {% set base = '/md/' ~ ent.key ~ '?q=' ~ q %}
+      {% if parent_field and parent_id %}{% set base = base ~ '&' ~ parent_field ~ '=' ~ parent_id %}{% endif %}
+      {% if page > 1 %}<a href="{{ base }}&page={{ page - 1 }}">上一页</a>{% endif %}
+      {% for p in range(1, pages + 1) %}
+        {% if p == page %}<span class="current">{{ p }}</span>{% else %}<a href="{{ base }}&page={{ p }}">{{ p }}</a>{% endif %}
+      {% endfor %}
+      {% if page < pages %}<a href="{{ base }}&page={{ page + 1 }}">下一页</a>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

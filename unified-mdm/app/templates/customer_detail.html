@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}{{ record.customer_name }} · 客户详情{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{{ record.customer_name }}</h1>
+    <div class="page-desc">{{ record.customer_code }} · {{ record.customer_type }} · {{ record.customer_status }}</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/md/customer">返回客户列表</a>
+    <a class="btn btn-primary" href="/md/customer/{{ record.id }}/edit">编辑客户</a>
+  </div>
+</div>
+
+<div class="card card-pad">
+  <div class="detail-grid">
+    <div class="detail-item"><div class="k">客户编码</div><div class="v">{{ record.customer_code or '' }}</div></div>
+    <div class="detail-item"><div class="k">客户简称</div><div class="v">{{ record.customer_short_name or '' }}</div></div>
+    <div class="detail-item"><div class="k">客户级别</div><div class="v">{{ record.customer_level or '' }}</div></div>
+    <div class="detail-item"><div class="k">客户状态</div><div class="v">{{ record.customer_status or '' }}</div></div>
+    <div class="detail-item"><div class="k">所属行业</div><div class="v">{{ record.industry_l1 or '' }} {{ record.industry_l2 or '' }}</div></div>
+    <div class="detail-item"><div class="k">所在地区</div><div class="v">{{ record.province or '' }} {{ record.city or '' }} {{ record.district or '' }}</div></div>
+    <div class="detail-item"><div class="k">客户负责人</div><div class="v">{{ record.manager_name or '' }}</div></div>
+    <div class="detail-item"><div class="k">统一社会信用代码</div><div class="v">{{ record.unified_social_credit or '' }}</div></div>
+    <div class="detail-item"><div class="k">纳税人识别号</div><div class="v">{{ record.tax_number or '' }}</div></div>
+    <div class="detail-item"><div class="k">回款账期</div><div class="v">{{ record.payment_cycle_days or 0 }} 天</div></div>
+    <div class="detail-item"><div class="k">信用额度</div><div class="v">{{ "{:,.2f}".format(record.credit_limit or 0) }} 元</div></div>
+    <div class="detail-item"><div class="k">地址</div><div class="v">{{ record.address or '' }}</div></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <a class="active" href="#contacts">联系人（{{ contacts|length }}）</a>
+  <a href="#addresses">地址（{{ addresses|length }}）</a>
+  <a href="#projects">项目（{{ projects|length }}）</a>
+  <a href="#contracts">合同（{{ contracts|length }}）</a>
+</div>
+
+<div class="card card-pad" id="contacts">
+  <div class="section-head">
+    <div><h2 class="card-title">联系人</h2><p class="card-sub">客户联系人主数据，支撑商机、合同和交付沟通。</p></div>
+    <a class="btn btn-primary btn-sm" href="/md/customer_contact/new?customer_id={{ record.id }}">+ 新增联系人</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>姓名</th><th>职务</th><th>手机</th><th>邮箱</th><th>类型</th><th>主要</th><th>决策人</th><th>状态</th><th class="right">操作</th></tr></thead>
+      <tbody>
+      {% for c in contacts %}
+        <tr>
+          <td><b>{{ c.contact_name }}</b></td>
+          <td>{{ c.contact_title or '' }}</td>
+          <td>{{ c.contact_mobile or '' }}</td>
+          <td>{{ c.contact_email or '' }}</td>
+          <td>{{ c.contact_type or '' }}</td>
+          <td>{% if c.is_primary %}<span class="badge badge-green">是</span>{% else %}<span class="badge badge-gray">否</span>{% endif %}</td>
+          <td>{% if c.is_decision_maker %}<span class="badge badge-blue">是</span>{% else %}<span class="badge badge-gray">否</span>{% endif %}</td>
+          <td>{{ c.status }}</td>
+          <td class="right">
+            <div class="actions" style="justify-content:flex-end">
+              <a class="btn btn-ghost btn-sm" href="/md/customer_contact/{{ c.id }}/edit">编辑</a>
+              <form method="post" action="/md/customer_contact/{{ c.id }}/delete" onsubmit="return confirm('确认删除联系人？');" style="display:inline"><button class="btn btn-danger btn-sm">删除</button></form>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9"><div class="empty">暂无联系人</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card card-pad" id="addresses" style="margin-top:18px">
+  <div class="section-head">
+    <div><h2 class="card-title">地址</h2><p class="card-sub">注册、开票、收货、办公地址。</p></div>
+    <a class="btn btn-primary btn-sm" href="/md/customer_address/new?customer_id={{ record.id }}">+ 新增地址</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>类型</th><th>详细地址</th><th>联系人</th><th>电话</th><th>默认</th><th>状态</th><th class="right">操作</th></tr></thead>
+      <tbody>
+      {% for a in addresses %}
+        <tr>
+          <td>{{ a.address_type }}</td>
+          <td>{{ a.province_name or '' }}{{ a.city_name or '' }}{{ a.district_name or '' }}{{ a.detail_address }}</td>
+          <td>{{ a.contact_person or '' }}</td>
+          <td>{{ a.contact_phone or '' }}</td>
+          <td>{% if a.is_default %}<span class="badge badge-green">是</span>{% else %}<span class="badge badge-gray">否</span>{% endif %}</td>
+          <td>{{ a.status }}</td>
+          <td class="right">
+            <div class="actions" style="justify-content:flex-end">
+              <a class="btn btn-ghost btn-sm" href="/md/customer_address/{{ a.id }}/edit">编辑</a>
+              <form method="post" action="/md/customer_address/{{ a.id }}/delete" onsubmit="return confirm('确认删除地址？');" style="display:inline"><button class="btn btn-danger btn-sm">删除</button></form>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7"><div class="empty">暂无地址</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="grid-2" style="margin-top:18px">
+  <div class="card card-pad" id="projects">
+    <div class="section-head"><div><h2 class="card-title">关联项目</h2><p class="card-sub">按客户维度查看项目。</p></div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>项目编码</th><th>项目名称</th><th>状态</th><th>进度</th></tr></thead>
+        <tbody>
+        {% for p in projects %}
+          <tr><td><a href="/detail/project/{{ p.id }}">{{ p.project_code }}</a></td><td>{{ p.project_name }}</td><td>{{ p.status }}</td><td>{{ p.progress }}%</td></tr>
+        {% else %}
+          <tr><td colspan="4"><div class="empty">暂无关联项目</div></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card card-pad" id="contracts">
+    <div class="section-head"><div><h2 class="card-title">关联合同</h2><p class="card-sub">按客户维度查看合同。</p></div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>合同编号</th><th>合同名称</th><th>金额</th><th>签约</th></tr></thead>
+        <tbody>
+        {% for c in contracts %}
+          <tr><td><a href="/detail/contract/{{ c.id }}">{{ c.contract_no }}</a></td><td>{{ c.contract_name }}</td><td>{{ "{:,.2f}".format(c.contract_amount or 0) }}</td><td>{{ c.sign_status }}</td></tr>
+        {% else %}
+          <tr><td colspan="4"><div class="empty">暂无关联合同</div></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

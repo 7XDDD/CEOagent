@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{{ ('编辑' if record else '新增') ~ ent.label }} · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{{ ('编辑' if record else '新增') }}{{ ent.label }}</h1>
+    <div class="page-desc">{{ ent.description }}</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/md/{{ ent.key }}">返回列表</a>
+  </div>
+</div>
+
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+<div class="card form-card">
+  <form method="post" action="{% if record %}/md/{{ ent.key }}/{{ record.id }}/edit{% else %}/md/{{ ent.key }}/new{% endif %}">
+    <div class="form-grid">
+      {% for f in ent.fields %}
+        {% if f.form %}
+        {% set val = values.get(f.name, '') %}
+        <div class="field {% if f.full or f.type == 'textarea' %}full{% endif %}">
+          <label>{{ f.label }}{% if f.required %}<span class="req">*</span>{% endif %}</label>
+          {% if f.type == 'textarea' %}
+            <textarea class="textarea" name="{{ f.name }}" placeholder="{{ f.placeholder }}">{{ val if val is not none else '' }}</textarea>
+          {% elif f.type == 'select' %}
+            <select class="select" name="{{ f.name }}">
+              <option value="">请选择</option>
+              {% if f.source %}
+                {% for opt in fk_options.get(f.name, []) %}
+                <option value="{{ opt.value }}" {% if val|string == opt.value|string %}selected{% endif %}>{{ opt.label }}</option>
+                {% endfor %}
+              {% else %}
+                {% for opt in f.options %}
+                <option value="{{ opt.value }}" {% if val|string == opt.value|string %}selected{% endif %}>{{ opt.label }}</option>
+                {% endfor %}
+              {% endif %}
+            </select>
+          {% elif f.type == 'checkbox' %}
+            {% set checked = val in [True, 'True', 'true', '1', 1, 'on'] %}
+            <div class="check">
+              <input type="checkbox" name="{{ f.name }}" id="f_{{ f.name }}" {% if checked %}checked{% endif %}/>
+              <label for="f_{{ f.name }}" style="margin:0;font-weight:500;color:#475569">是</label>
+            </div>
+          {% elif f.type == 'password' %}
+            <input class="input" type="password" name="{{ f.name }}" value="" placeholder="{{ f.help or '请输入密码' }}" {% if not record and f.required %}required{% endif %}/>
+          {% elif f.type == 'date' %}
+            <input class="input" type="date" name="{{ f.name }}" value="{{ val if val is not none else '' }}"/>
+          {% elif f.type == 'number' %}
+            <input class="input" type="number" step="1" name="{{ f.name }}" value="{{ val if val is not none else '' }}"/>
+          {% elif f.type == 'decimal' %}
+            <input class="input" type="number" step="any" name="{{ f.name }}" value="{{ val if val is not none else '' }}"/>
+          {% else %}
+            <input class="input" name="{{ f.name }}" value="{{ val if val is not none else '' }}" placeholder="{{ f.placeholder }}"/>
+          {% endif %}
+          {% if f.help %}<div class="help">{{ f.help }}</div>{% endif %}
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <div class="form-actions">
+      <a class="btn btn-ghost" href="/md/{{ ent.key }}">取消</a>
+      <button class="btn btn-primary" type="submit">保存</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

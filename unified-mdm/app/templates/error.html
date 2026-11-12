@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}提示 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{{ status_code }}</h1>
+    <div class="page-desc">操作未完成</div>
+  </div>
+</div>
+<div class="card card-pad">
+  <div class="empty">
+    <div class="empty-ico">⚠️</div>
+    <div style="font-size:15px;color:#334155;margin-bottom:8px">{{ message }}</div>
+    <div class="actions" style="justify-content:center">
+      <a class="btn btn-ghost" href="javascript:history.back()">返回上一页</a>
+      <a class="btn btn-primary" href="/mdm">回到工作台</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

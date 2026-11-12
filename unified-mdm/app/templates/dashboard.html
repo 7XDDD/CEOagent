@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}总览 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">平台底座与主数据总览</h1>
+    <div class="page-desc">统一组织、人员、客户、项目、合同；为后续 CRM、项目交付、人力、财务预算提供唯一数据源。</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/api/stats" target="_blank">查看统计 API</a>
+    <a class="btn btn-primary" href="/org/tree">进入组织架构</a>
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="card kpi"><div class="kpi-ico">🏢</div><div class="kpi-label">法人主体</div><div class="kpi-value">{{ counts.company }}</div><div class="kpi-foot">公司、纳税与开票主体</div></div>
+  <div class="card kpi"><div class="kpi-ico">🏛️</div><div class="kpi-label">组织节点</div><div class="kpi-value">{{ counts.org }}</div><div class="kpi-foot">集团、部门、产品线</div></div>
+  <div class="card kpi"><div class="kpi-ico">👤</div><div class="kpi-label">员工</div><div class="kpi-value">{{ counts.employee }}</div><div class="kpi-foot">主数据人员档案</div></div>
+  <div class="card kpi"><div class="kpi-ico">🤝</div><div class="kpi-label">客户</div><div class="kpi-value">{{ counts.customer }}</div><div class="kpi-foot">客户、联系人与地址</div></div>
+  <div class="card kpi"><div class="kpi-ico">📁</div><div class="kpi-label">项目</div><div class="kpi-value">{{ counts.project }}</div><div class="kpi-foot">项目与项目成员</div></div>
+  <div class="card kpi"><div class="kpi-ico">📜</div><div class="kpi-label">合同</div><div class="kpi-value">{{ counts.contract }}</div><div class="kpi-foot">合同与收付款计划</div></div>
+  <div class="card kpi"><div class="kpi-ico">📦</div><div class="kpi-label">产品/物料</div><div class="kpi-value">{{ counts.product }}</div><div class="kpi-foot">产品、服务与物料</div></div>
+  <div class="card kpi"><div class="kpi-ico">📊</div><div class="kpi-label">税率</div><div class="kpi-value">{{ counts.tax_rate }}</div><div class="kpi-foot">合同类型与税率历史</div></div>
+</div>
+
+<div class="grid-2">
+  <div class="card card-pad">
+    <div class="section-head">
+      <div>
+        <h2 class="card-title">数据质量检查</h2>
+        <p class="card-sub">主数据统一后，先看唯一性、完整性和关联完整性。</p>
+      </div>
+      <span class="badge badge-blue">实时</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>检查项</th><th>数量</th><th>建议</th><th>状态</th></tr></thead>
+        <tbody>
+        {% for item in dq %}
+          <tr>
+            <td>{{ item.label }}</td>
+            <td><b>{{ item.value }}</b></td>
+            <td class="muted">{{ item.hint }}</td>
+            <td>
+              {% if item.value == 0 %}<span class="badge badge-green">通过</span>
+              {% elif item.value < 5 %}<span class="badge badge-amber">关注</span>
+              {% else %}<span class="badge badge-red">待治理</span>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card card-pad">
+    <div class="section-head">
+      <div>
+        <h2 class="card-title">最近操作</h2>
+        <p class="card-sub">平台底座已开启操作审计。</p>
+      </div>
+      <a class="btn btn-ghost btn-sm" href="/audit">全部日志</a>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>用户</th><th>动作</th><th>对象</th><th>时间</th></tr></thead>
+        <tbody>
+        {% for log in logs %}
+          <tr>
+            <td>{{ log.username }}</td>
+            <td><span class="badge badge-gray">{{ log.action }}</span></td>
+            <td>{{ log.entity }}{% if log.entity_id %} #{{ log.entity_id }}{% endif %}</td>
+            <td class="muted">{{ log.create_time.strftime('%m-%d %H:%M') if log.create_time else '' }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="empty">暂无操作日志</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="grid-3" style="margin-top:18px">
+  <div class="card card-pad">
+    <h2 class="card-title">组织与人员</h2>
+    <p class="card-sub">组织树、岗位、员工、账号与角色权限。</p>
+    <div class="actions">
+      <a class="btn btn-ghost btn-sm" href="/org/tree">组织架构</a>
+      <a class="btn btn-ghost btn-sm" href="/md/employee">员工</a>
+      <a class="btn btn-ghost btn-sm" href="/md/user">用户</a>
+    </div>
+  </div>
+  <div class="card card-pad">
+    <h2 class="card-title">客户、项目与合同</h2>
+    <p class="card-sub">客户主数据、项目主数据、合同与里程碑。</p>
+    <div class="actions">
+      <a class="btn btn-ghost btn-sm" href="/md/customer">客户</a>
+      <a class="btn btn-ghost btn-sm" href="/md/project">项目</a>
+      <a class="btn btn-ghost btn-sm" href="/md/contract">合同</a>
+    </div>
+  </div>
+  <div class="card card-pad">
+    <h2 class="card-title">平台治理</h2>
+    <p class="card-sub">字典、税率、ID 映射与审计日志。</p>
+    <div class="actions">
+      <a class="btn btn-ghost btn-sm" href="/md/dict">字典</a>
+      <a class="btn btn-ghost btn-sm" href="/md/id_mapping">ID 映射</a>
+      <a class="btn btn-ghost btn-sm" href="/audit">审计</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
