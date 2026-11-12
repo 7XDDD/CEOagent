@@ -22,6 +22,13 @@
         <a href="/mdm" class="{{ 'active' if path in ['/', '/mdm', '/mdm/'] else '' }}"><span class="ico">🏠</span>总览</a>
       </div>
       <div class="nav-group">
+        <div class="nav-label">CRM 业务</div>
+        <a href="/crm" class="{{ 'active' if path == '/crm' else '' }}"><span class="ico">📈</span>CRM 看板</a>
+        <a href="/md/opportunity" class="{{ 'active' if path.startswith('/md/opportunity') and not path.startswith('/md/opportunity_follow') else '' }}"><span class="ico">🎯</span>商机</a>
+        <a href="/md/opportunity_follow" class="{{ 'active' if path.startswith('/md/opportunity_follow') else '' }}"><span class="ico">📝</span>跟进记录</a>
+        <a href="/crm/payment" class="{{ 'active' if path.startswith('/crm/payment') else '' }}"><span class="ico">💰</span>回款视图</a>
+      </div>
+      <div class="nav-group">
         <div class="nav-label">组织与人员</div>
         <a href="/md/company" class="{{ 'active' if path.startswith('/md/company') else '' }}"><span class="ico">🏢</span>法人主体</a>
         <a href="/org/tree" class="{{ 'active' if path.startswith('/org') else '' }}"><span class="ico">🏛️</span>组织架构</a>

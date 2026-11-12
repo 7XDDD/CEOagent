@@ -12,8 +12,10 @@ from .models import (
     Customer,
     Dict,
     Employee,
+    Opportunity,
     Org,
     Position,
+    Product,
     Project,
     Role,
 )
@@ -27,6 +29,8 @@ SOURCE_MAP = {
     "customer": (Customer, "customer_code", "customer_name", None),
     "project": (Project, "project_code", "project_name", None),
     "contract": (Contract, "contract_no", "contract_name", None),
+    "opportunity": (Opportunity, "opportunity_no", "name", None),
+    "product": (Product, "product_code", "product_name", None),
     "dict": (Dict, "dict_code", "dict_name", None),
     "role": (Role, "role_code", "role_name", None),
 }

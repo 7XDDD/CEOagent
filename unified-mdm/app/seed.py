@@ -7,13 +7,17 @@ from .models import (
     Company,
     Contract,
     ContractMilestone,
+    ContractOpportunity,
     ContractProject,
     Customer,
     CustomerAddress,
     CustomerContact,
+    CustomerFollower,
     Dict,
     DictItem,
     Employee,
+    Opportunity,
+    OpportunityFollow,
     Org,
     Position,
     Product,
@@ -33,8 +37,8 @@ def seed():
             return
         roles = [
             Role(role_code="ADMIN", role_name="超级管理员", permissions="*", description="全部权限", status=1),
-            Role(role_code="EDITOR", role_name="主数据编辑", permissions="md.*", description="主数据增删改查", status=1),
-            Role(role_code="VIEWER", role_name="只读用户", permissions="md.*.view", description="主数据只读", status=1),
+            Role(role_code="EDITOR", role_name="主数据编辑", permissions="md.*,crm.*", description="主数据 + CRM 增删改查", status=1),
+            Role(role_code="VIEWER", role_name="只读用户", permissions="md.*.view,crm.*.view", description="主数据 + CRM 只读", status=1),
         ]
         db.add_all(roles)
         db.flush()
@@ -277,6 +281,7 @@ def seed():
         ]
         db.add_all(products)
         db.flush()
+        product_map = {p.product_code: p for p in products}
 
         tax_rates = [
             TaxRate(company_id=1, contract_type_code="CONSULTING", contract_type_name="咨询服务", effective_date=date(2026, 1, 1), tax_rate=Decimal("0.06"), surtax_rate=Decimal("0.12"), description="咨询服务增值税6%", status=1),
@@ -477,6 +482,42 @@ def seed():
             ContractProject(company_id=1, project_id=proj_map["PRJ002"].id, contract_id=con_map["HT2026002"].id, relation_type="MAIN", is_primary=True),
         ]
         db.add_all(links)
+
+        opportunities = [
+            Opportunity(company_id=1, opportunity_no="OPP2026001", name="华夏制造二期数据治理商机", customer_id=cust_map["C001"].id, customer_name=cust_map["C001"].customer_name, stage="STAGE_03", stage_rate=Decimal("20"), amount=Decimal("800000"), expected_deal_date=date(2026, 12, 15), expected_sign_date=date(2026, 12, 31), status="IN_PROGRESS", sales_status="NORMAL", project_level="LARGE", owner_id=emp_map["E004"].id, owner_name="赵敏", sales_person_id=emp_map["E004"].id, sales_person_name="赵敏", product_id=product_map["P001"].id, product_name="数字化转型咨询", source_type="MANUAL", description="华夏制造二期数据治理规划，客户预算已立项。"),
+            Opportunity(company_id=1, opportunity_no="OPP2026002", name="星辰能源数据中台商机", customer_id=cust_map["C002"].id, customer_name=cust_map["C002"].customer_name, stage="STAGE_06", stage_rate=Decimal("90"), amount=Decimal("900000"), expected_deal_date=date(2026, 3, 1), expected_sign_date=date(2026, 3, 1), status="IN_PROGRESS", sales_status="KEY", project_level="MEDIUM", owner_id=emp_map["E004"].id, owner_name="赵敏", sales_person_id=emp_map["E004"].id, sales_person_name="赵敏", product_id=product_map["P002"].id, product_name="数据中台实施", source_type="MANUAL", description="星辰能源数据中台项目，已进入合同审批阶段。"),
+            Opportunity(company_id=1, opportunity_no="OPP2026003", name="云海科技数据咨询商机", customer_id=cust_map["C003"].id, customer_name=cust_map["C003"].customer_name, stage="STAGE_02", stage_rate=Decimal("10"), amount=Decimal("300000"), expected_deal_date=date(2026, 11, 30), expected_sign_date=date(2026, 12, 15), status="IN_PROGRESS", sales_status="NORMAL", project_level="SMALL", owner_id=emp_map["E004"].id, owner_name="赵敏", sales_person_id=emp_map["E004"].id, sales_person_name="赵敏", product_id=product_map["P001"].id, product_name="数字化转型咨询", source_type="MANUAL", description="云海科技数据治理咨询，处于需求确认阶段。"),
+            Opportunity(company_id=1, opportunity_no="OPP2026004", name="华夏制造运维续签商机", customer_id=cust_map["C001"].id, customer_name=cust_map["C001"].customer_name, stage="STAGE_07", stage_rate=Decimal("100"), amount=Decimal("500000"), expected_deal_date=date(2026, 9, 30), expected_sign_date=date(2026, 9, 30), status="WON", sales_status="NORMAL", project_level="SMALL", owner_id=emp_map["E004"].id, owner_name="赵敏", sales_person_id=emp_map["E004"].id, sales_person_name="赵敏", product_id=product_map["P003"].id, product_name="运维服务", source_type="MANUAL", description="华夏制造年度运维续签，已赢单。"),
+            Opportunity(company_id=1, opportunity_no="OPP2026005", name="华夏制造数字化转型一期商机", customer_id=cust_map["C001"].id, customer_name=cust_map["C001"].customer_name, stage="STAGE_07", stage_rate=Decimal("100"), amount=Decimal("1500000"), expected_deal_date=date(2026, 1, 15), expected_sign_date=date(2026, 1, 15), status="WON", sales_status="KEY", project_level="LARGE", owner_id=emp_map["E004"].id, owner_name="赵敏", sales_person_id=emp_map["E004"].id, sales_person_name="赵敏", product_id=product_map["P001"].id, product_name="数字化转型咨询", source_type="MANUAL", description="华夏制造数字化转型一期，已签约。"),
+        ]
+        db.add_all(opportunities)
+        db.flush()
+        opp_map = {o.opportunity_no: o for o in opportunities}
+
+        follows = [
+            OpportunityFollow(company_id=1, opportunity_id=opp_map["OPP2026001"].id, opportunity_name=opp_map["OPP2026001"].name, customer_id=cust_map["C001"].id, customer_name=cust_map["C001"].customer_name, follow_time=date(2026, 11, 1), follower_id=emp_map["E004"].id, follower_name="赵敏", contact_name="王建国", content="拜访客户采购总监，确认二期数据治理预算已立项，客户希望 12 月完成方案。", plan_title="提交二期方案建议书", plan_content="整理数据治理方法论和标杆案例，11 月 20 日前提交。", plan_time=date(2026, 11, 20), plan_status="PENDING", status="DONE"),
+            OpportunityFollow(company_id=1, opportunity_id=opp_map["OPP2026001"].id, opportunity_name=opp_map["OPP2026001"].name, customer_id=cust_map["C001"].id, customer_name=cust_map["C001"].customer_name, follow_time=date(2026, 11, 10), follower_id=emp_map["E004"].id, follower_name="赵敏", contact_name="王建国", content="与客户数据负责人沟通，确认一期数据中台使用效果良好，二期可扩大范围。", plan_title="安排方案汇报", plan_content="约客户高层 11 月底进行方案汇报。", plan_time=date(2026, 11, 28), plan_status="PENDING", status="DONE"),
+            OpportunityFollow(company_id=1, opportunity_id=opp_map["OPP2026002"].id, opportunity_name=opp_map["OPP2026002"].name, customer_id=cust_map["C002"].id, customer_name=cust_map["C002"].customer_name, follow_time=date(2026, 2, 20), follower_id=emp_map["E004"].id, follower_name="赵敏", contact_name="周涛", content="向客户信息中心汇报数据中台方案，客户认可技术路线，要求补充实施计划和报价。", plan_title="商务谈判", plan_content="确认合同金额和付款节点，推进合同审批。", plan_time=date(2026, 2, 28), plan_status="DONE", status="DONE"),
+            OpportunityFollow(company_id=1, opportunity_id=opp_map["OPP2026003"].id, opportunity_name=opp_map["OPP2026003"].name, customer_id=cust_map["C003"].id, customer_name=cust_map["C003"].customer_name, follow_time=date(2026, 11, 5), follower_id=emp_map["E004"].id, follower_name="赵敏", contact_name="孙悦", content="与云海科技技术负责人完成需求调研，客户关注数据治理和数据资产盘点。", plan_title="输出需求调研报告", plan_content="一周内输出调研报告和初步方案。", plan_time=date(2026, 11, 15), plan_status="PENDING", status="DONE"),
+            OpportunityFollow(company_id=1, opportunity_id=opp_map["OPP2026004"].id, opportunity_name=opp_map["OPP2026004"].name, customer_id=cust_map["C001"].id, customer_name=cust_map["C001"].customer_name, follow_time=date(2026, 9, 15), follower_id=emp_map["E004"].id, follower_name="赵敏", contact_name="王建国", content="运维续签商务沟通完成，客户确认续签一年。", plan_title="合同签署", plan_content="跟进合同盖章和回款。", plan_time=date(2026, 9, 30), plan_status="DONE", status="DONE"),
+            OpportunityFollow(company_id=1, opportunity_id=opp_map["OPP2026005"].id, opportunity_name=opp_map["OPP2026005"].name, customer_id=cust_map["C001"].id, customer_name=cust_map["C001"].customer_name, follow_time=date(2026, 1, 5), follower_id=emp_map["E004"].id, follower_name="赵敏", contact_name="王建国", content="完成合同谈判，客户确认合同金额 150 万，分三期付款。", plan_title="合同签署", plan_content="1 月 15 日前完成合同签署。", plan_time=date(2026, 1, 15), plan_status="DONE", status="DONE"),
+        ]
+        db.add_all(follows)
+
+        followers = [
+            CustomerFollower(company_id=1, customer_id=cust_map["C001"].id, employee_id=emp_map["E004"].id, employee_name="赵敏", follower_type="SALES", is_primary=True, start_date=date(2021, 1, 1), status=1),
+            CustomerFollower(company_id=1, customer_id=cust_map["C001"].id, employee_id=emp_map["E001"].id, employee_name="张伟", follower_type="DELIVERY", is_primary=False, start_date=date(2026, 2, 1), status=1),
+            CustomerFollower(company_id=1, customer_id=cust_map["C002"].id, employee_id=emp_map["E004"].id, employee_name="赵敏", follower_type="SALES", is_primary=True, start_date=date(2025, 6, 1), status=1),
+            CustomerFollower(company_id=1, customer_id=cust_map["C003"].id, employee_id=emp_map["E004"].id, employee_name="赵敏", follower_type="SALES", is_primary=True, start_date=date(2026, 9, 1), status=1),
+        ]
+        db.add_all(followers)
+
+        opp_links = [
+            ContractOpportunity(company_id=1, contract_id=con_map["HT2026001"].id, opportunity_id=opp_map["OPP2026005"].id),
+            ContractOpportunity(company_id=1, contract_id=con_map["HT2026002"].id, opportunity_id=opp_map["OPP2026002"].id),
+        ]
+        db.add_all(opp_links)
+        db.flush()
 
         dicts = [
             Dict(company_id=1, dict_code="ORG_TYPE", dict_name="组织类型", system_type="SYS", status=1),

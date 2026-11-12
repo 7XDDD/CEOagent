@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}{{ record.name }} · 商机详情{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{{ record.name }}</h1>
+    <div class="page-desc">{{ record.opportunity_no }} · {{ record.customer_name or '' }} · {{ record.stage }} / {{ record.stage_rate }}%</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/md/opportunity">返回商机列表</a>
+    <a class="btn btn-ghost" href="/md/opportunity/{{ record.id }}/edit">编辑商机</a>
+    {% if not links %}
+    <form method="post" action="/crm/opportunity/{{ record.id }}/convert" onsubmit="return confirm('确认将该商机转为合同？');" style="display:inline">
+      <button class="btn btn-primary" type="submit">转合同</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if message %}<div class="flash">{{ message }}</div>{% endif %}
+
+<div class="card card-pad">
+  <div class="detail-grid">
+    <div class="detail-item"><div class="k">商机编号</div><div class="v">{{ record.opportunity_no }}</div></div>
+    <div class="detail-item"><div class="k">客户</div><div class="v">{{ record.customer_name or '' }}</div></div>
+    <div class="detail-item"><div class="k">商机阶段</div><div class="v">{{ record.stage }} / {{ record.stage_rate }}%</div></div>
+    <div class="detail-item"><div class="k">商机金额</div><div class="v">{{ "{:,.2f}".format(record.amount or 0) }} 元</div></div>
+    <div class="detail-item"><div class="k">预计成交日期</div><div class="v">{{ record.expected_deal_date or '' }}</div></div>
+    <div class="detail-item"><div class="k">预计签约日期</div><div class="v">{{ record.expected_sign_date or '' }}</div></div>
+    <div class="detail-item"><div class="k">负责人</div><div class="v">{{ record.owner_name or '' }}</div></div>
+    <div class="detail-item"><div class="k">销售负责人</div><div class="v">{{ record.sales_person_name or '' }}</div></div>
+    <div class="detail-item"><div class="k">需求产品</div><div class="v">{{ record.product_name or '' }}</div></div>
+    <div class="detail-item"><div class="k">商机状态</div><div class="v">
+      {% if record.status == 'WON' %}赢单{% elif record.status == 'LOST' %}输单{% else %}进行中{% endif %}
+    </div></div>
+    <div class="detail-item"><div class="k">项目等级</div><div class="v">{{ record.project_level or '' }}</div></div>
+    <div class="detail-item"><div class="k">数据来源</div><div class="v">{{ record.source_type or '' }}</div></div>
+  </div>
+  {% if record.description %}
+  <div class="notice" style="margin-top:16px">{{ record.description }}</div>
+  {% endif %}
+</div>
+
+<div class="card card-pad" style="margin-top:18px">
+  <div class="section-head">
+    <div><h2 class="card-title">跟进记录</h2><p class="card-sub">记录每次客户沟通和下一步计划。</p></div>
+    <a class="btn btn-primary btn-sm" href="/md/opportunity_follow/new?opportunity_id={{ record.id }}">+ 新增跟进</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>跟进日期</th><th>跟进人</th><th>联系人</th><th>跟进内容</th><th>下一步计划</th><th>计划时间</th><th>计划状态</th><th class="right">操作</th></tr></thead>
+      <tbody>
+      {% for f in follows %}
+        <tr>
+          <td>{{ f.follow_time or '' }}</td>
+          <td>{{ f.follower_name or '' }}</td>
+          <td>{{ f.contact_name or '' }}</td>
+          <td style="max-width:360px">{{ f.content or '' }}</td>
+          <td>{{ f.plan_title or '' }}</td>
+          <td>{{ f.plan_time or '' }}</td>
+          <td>
+            {% if f.plan_status == 'DONE' %}<span class="badge badge-green">已完成</span>
+            {% elif f.plan_status == 'CANCELED' %}<span class="badge badge-gray">已取消</span>
+            {% else %}<span class="badge badge-amber">待执行</span>{% endif %}
+          </td>
+          <td class="right">
+            <div class="actions" style="justify-content:flex-end">
+              <a class="btn btn-ghost btn-sm" href="/md/opportunity_follow/{{ f.id }}/edit">编辑</a>
+              <form method="post" action="/md/opportunity_follow/{{ f.id }}/delete" onsubmit="return confirm('确认删除跟进记录？');" style="display:inline"><button class="btn btn-danger btn-sm">删除</button></form>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8"><div class="empty">暂无跟进记录</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card card-pad" style="margin-top:18px">
+  <div class="section-head">
+    <div><h2 class="card-title">关联合同</h2><p class="card-sub">商机转合同后，可在这里查看合同台账。</p></div>
+    {% if links %}
+    <a class="btn btn-ghost btn-sm" href="/detail/contract/{{ links[0][1].id }}">查看合同</a>
+    {% endif %}
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>合同编号</th><th>合同名称</th><th>合同金额</th><th>签约状态</th><th>执行状态</th></tr></thead>
+      <tbody>
+      {% for link, c in links %}
+        <tr><td><a href="/detail/contract/{{ c.id }}">{{ c.contract_no }}</a></td><td>{{ c.contract_name }}</td><td>{{ "{:,.2f}".format(c.contract_amount or 0) }}</td><td>{{ c.sign_status }}</td><td>{{ c.execution_status }}</td></tr>
+      {% else %}
+        <tr><td colspan="5"><div class="empty">尚未转合同</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

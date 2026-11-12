@@ -1,4 +1,5 @@
 from datetime import datetime
+from fnmatch import fnmatch
 
 import bcrypt
 from fastapi import Request
@@ -41,12 +42,9 @@ def has_permission(db: Session, user: User, perm: str) -> bool:
         return False
     raw = (role.permissions or "").replace(" ", "")
     perms = [p for p in raw.split(",") if p]
-    if "*" in perms or "md.*" in perms:
-        return True
-    if perm in perms:
-        return True
-    if perm.endswith(".view") and "md.*.view" in perms:
-        return True
+    for pattern in perms:
+        if pattern == "*" or fnmatch(perm, pattern):
+            return True
     return False
 
 

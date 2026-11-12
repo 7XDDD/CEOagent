@@ -32,6 +32,8 @@
 <div class="tabs">
   <a class="active" href="#contacts">联系人（{{ contacts|length }}）</a>
   <a href="#addresses">地址（{{ addresses|length }}）</a>
+  <a href="#followers">跟进人（{{ followers|length }}）</a>
+  <a href="#opportunities">商机（{{ opportunities|length }}）</a>
   <a href="#projects">项目（{{ projects|length }}）</a>
   <a href="#contracts">合同（{{ contracts|length }}）</a>
 </div>
@@ -96,6 +98,69 @@
         </tr>
       {% else %}
         <tr><td colspan="7"><div class="empty">暂无地址</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card card-pad" id="followers" style="margin-top:18px">
+  <div class="section-head">
+    <div><h2 class="card-title">跟进人</h2><p class="card-sub">客户归属与主要跟进人，用于商机分配和数据权限。</p></div>
+    <a class="btn btn-primary btn-sm" href="/md/customer_follower/new?customer_id={{ record.id }}">+ 新增跟进人</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>跟进人</th><th>类型</th><th>主要跟进人</th><th>开始日期</th><th>结束日期</th><th>状态</th><th class="right">操作</th></tr></thead>
+      <tbody>
+      {% for f in followers %}
+        <tr>
+          <td><b>{{ f.employee_name or '' }}</b></td>
+          <td>{{ f.follower_type }}</td>
+          <td>{% if f.is_primary %}<span class="badge badge-green">是</span>{% else %}<span class="badge badge-gray">否</span>{% endif %}</td>
+          <td>{{ f.start_date or '' }}</td>
+          <td>{{ f.end_date or '' }}</td>
+          <td>{{ '启用' if f.status == 1 else '停用' }}</td>
+          <td class="right">
+            <div class="actions" style="justify-content:flex-end">
+              <a class="btn btn-ghost btn-sm" href="/md/customer_follower/{{ f.id }}/edit">编辑</a>
+              <form method="post" action="/md/customer_follower/{{ f.id }}/delete" onsubmit="return confirm('确认删除跟进人？');" style="display:inline"><button class="btn btn-danger btn-sm">删除</button></form>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7"><div class="empty">暂无跟进人</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card card-pad" id="opportunities" style="margin-top:18px">
+  <div class="section-head">
+    <div><h2 class="card-title">商机</h2><p class="card-sub">该客户名下的商机与阶段。</p></div>
+    <a class="btn btn-primary btn-sm" href="/md/opportunity/new?customer_id={{ record.id }}">+ 新增商机</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>商机编号</th><th>商机名称</th><th>阶段</th><th>金额</th><th>预计签约</th><th>负责人</th><th>状态</th></tr></thead>
+      <tbody>
+      {% for o in opportunities %}
+        <tr>
+          <td><a href="/detail/opportunity/{{ o.id }}">{{ o.opportunity_no }}</a></td>
+          <td>{{ o.name }}</td>
+          <td>{{ o.stage }} / {{ o.stage_rate }}%</td>
+          <td>{{ "{:,.2f}".format(o.amount or 0) }}</td>
+          <td>{{ o.expected_sign_date or '' }}</td>
+          <td>{{ o.owner_name or '' }}</td>
+          <td>
+            {% if o.status == 'WON' %}<span class="badge badge-green">赢单</span>
+            {% elif o.status == 'LOST' %}<span class="badge badge-red">输单</span>
+            {% else %}<span class="badge badge-blue">进行中</span>{% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7"><div class="empty">暂无商机</div></td></tr>
       {% endfor %}
       </tbody>
     </table>

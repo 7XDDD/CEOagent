@@ -308,6 +308,78 @@ class CustomerAddress(Base, AuditMixin):
     remark = Column(String(512))
 
 
+class CustomerFollower(Base, AuditMixin):
+    __tablename__ = "crm_customer_follower"
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, default=1)
+    customer_id = Column(Integer, nullable=False)
+    employee_id = Column(Integer)
+    employee_name = Column(String(64))
+    follower_type = Column(String(32), default="SALES")
+    is_primary = Column(Boolean, default=False)
+    start_date = Column(Date)
+    end_date = Column(Date)
+    status = Column(Integer, default=1)
+    remark = Column(String(512))
+    __table_args__ = (
+        UniqueConstraint("customer_id", "employee_id", "deleted", name="uk_crm_customer_follower"),
+    )
+
+
+class Opportunity(Base, MasterMixin):
+    __tablename__ = "crm_opportunity"
+    id = Column(Integer, primary_key=True)
+    opportunity_no = Column(String(64), nullable=False)
+    name = Column(String(200), nullable=False)
+    customer_id = Column(Integer)
+    customer_name = Column(String(200))
+    stage = Column(String(20), default="STAGE_01")
+    stage_rate = Column(Numeric(5, 2), default=5)
+    amount = Column(Numeric(18, 2), default=0)
+    expected_deal_date = Column(Date)
+    expected_sign_date = Column(Date)
+    status = Column(String(20), default="IN_PROGRESS")
+    sales_status = Column(String(32), default="NORMAL")
+    project_level = Column(String(32), default="MEDIUM")
+    owner_id = Column(Integer)
+    owner_name = Column(String(64))
+    sales_person_id = Column(Integer)
+    sales_person_name = Column(String(64))
+    product_id = Column(Integer)
+    product_name = Column(String(200))
+    source_type = Column(String(20), default="MANUAL")
+    description = Column(Text)
+    data_status = Column(String(20), default="ACTIVE")
+    remark = Column(String(512))
+    __table_args__ = (
+        UniqueConstraint("company_id", "opportunity_no", "deleted", name="uk_crm_opportunity_no"),
+        Index("idx_crm_opportunity_customer", "customer_id"),
+        Index("idx_crm_opportunity_stage", "stage"),
+    )
+
+
+class OpportunityFollow(Base, AuditMixin):
+    __tablename__ = "crm_opportunity_follow"
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, default=1)
+    opportunity_id = Column(Integer, nullable=False)
+    opportunity_name = Column(String(200))
+    customer_id = Column(Integer)
+    customer_name = Column(String(200))
+    follow_time = Column(Date)
+    follower_id = Column(Integer)
+    follower_name = Column(String(64))
+    contact_name = Column(String(64))
+    content = Column(Text)
+    plan_title = Column(String(200))
+    plan_content = Column(Text)
+    plan_time = Column(Date)
+    plan_status = Column(String(20), default="PENDING")
+    status = Column(String(20), default="DONE")
+    remark = Column(String(512))
+
+
+
 class Project(Base, MasterMixin):
     __tablename__ = "md_project"
     id = Column(Integer, primary_key=True)
@@ -509,6 +581,17 @@ class ContractProject(Base, AuditMixin):
     is_primary = Column(Boolean, default=False)
     __table_args__ = (
         UniqueConstraint("project_id", "contract_id", "deleted", name="uk_md_project_contract"),
+    )
+
+
+class ContractOpportunity(Base, AuditMixin):
+    __tablename__ = "crm_contract_opportunity"
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, default=1)
+    contract_id = Column(Integer, nullable=False)
+    opportunity_id = Column(Integer, nullable=False)
+    __table_args__ = (
+        UniqueConstraint("contract_id", "opportunity_id", "deleted", name="uk_crm_contract_opportunity"),
     )
 
 

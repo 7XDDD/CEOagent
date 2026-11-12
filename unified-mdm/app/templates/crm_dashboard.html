@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}CRM 看板 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">CRM 经营看板</h1>
+    <div class="page-desc">客户、商机、合同、回款一屏看清；数据来自统一客户主数据与合同台账。</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/crm/payment">回款视图</a>
+    <a class="btn btn-primary" href="/md/opportunity/new">+ 新增商机</a>
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="card kpi"><div class="kpi-ico">🤝</div><div class="kpi-label">客户数</div><div class="kpi-value">{{ counts.customer }}</div><div class="kpi-foot">统一客户主数据</div></div>
+  <div class="card kpi"><div class="kpi-ico">🎯</div><div class="kpi-label">商机数</div><div class="kpi-value">{{ counts.opportunity }}</div><div class="kpi-foot">含进行中、赢单、输单</div></div>
+  <div class="card kpi"><div class="kpi-ico">📈</div><div class="kpi-label">进行中商机金额</div><div class="kpi-value">{{ "{:,.0f}".format(pipeline_total) }}</div><div class="kpi-foot">单位：元</div></div>
+  <div class="card kpi"><div class="kpi-ico">🏆</div><div class="kpi-label">已赢单金额</div><div class="kpi-value">{{ "{:,.0f}".format(won_total) }}</div><div class="kpi-foot">单位：元</div></div>
+  <div class="card kpi"><div class="kpi-ico">📜</div><div class="kpi-label">已签约合同金额</div><div class="kpi-value">{{ "{:,.0f}".format(signed_total) }}</div><div class="kpi-foot">单位：元</div></div>
+  <div class="card kpi"><div class="kpi-ico">💰</div><div class="kpi-label">应收余额</div><div class="kpi-value">{{ "{:,.0f}".format(outstanding_total) }}</div><div class="kpi-foot">里程碑金额 - 已回款</div></div>
+  <div class="card kpi"><div class="kpi-ico">⏰</div><div class="kpi-label">逾期金额</div><div class="kpi-value" style="color:#dc2626">{{ "{:,.0f}".format(overdue_total) }}</div><div class="kpi-foot">{{ counts.overdue }} 笔逾期里程碑</div></div>
+  <div class="card kpi"><div class="kpi-ico">📁</div><div class="kpi-label">合同数</div><div class="kpi-value">{{ counts.contract }}</div><div class="kpi-foot">合同台账</div></div>
+</div>
+
+<div class="grid-2">
+  <div class="card card-pad">
+    <div class="section-head">
+      <div><h2 class="card-title">商机漏斗</h2><p class="card-sub">按阶段统计商机数量与金额，识别转化瓶颈。</p></div>
+      <a class="btn btn-ghost btn-sm" href="/md/opportunity">全部商机</a>
+    </div>
+    {% set max_count = (funnel|map(attribute='count')|max) or 1 %}
+    {% for item in funnel %}
+    <div style="display:grid;grid-template-columns:150px 1fr 90px;gap:12px;align-items:center;margin:10px 0">
+      <div style="font-size:12.5px;color:#475569">{{ item.label }}</div>
+      <div style="height:10px;background:#eef2f7;border-radius:999px;overflow:hidden">
+        <div style="height:100%;width:{{ (item.count / max_count * 100)|round(0) }}%;background:linear-gradient(90deg,#3b82f6,#60a5fa);border-radius:999px"></div>
+      </div>
+      <div style="text-align:right;font-size:12.5px;color:#334155"><b>{{ item.count }}</b> 个 / {{ "{:,.0f}".format(item.amount) }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card card-pad">
+    <div class="section-head">
+      <div><h2 class="card-title">近期回款提醒</h2><p class="card-sub">未来 30 天内预计回款及已逾期里程碑。</p></div>
+      <a class="btn btn-ghost btn-sm" href="/crm/payment">回款视图</a>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>合同</th><th>里程碑</th><th>应收</th><th>预计回款</th></tr></thead>
+        <tbody>
+        {% for m, c in upcoming %}
+          <tr>
+            <td><a href="/detail/contract/{{ c.id }}">{{ c.contract_no }}</a></td>
+            <td>{{ m.milestone_name }}</td>
+            <td>{{ "{:,.0f}".format((m.milestone_amount or 0) - (m.paid_amount or m.actual_payment_amount or 0)) }}</td>
+            <td class="{% if m.expected_payment_date and m.expected_payment_date < today %}muted{% endif %}">{{ m.expected_payment_date or '' }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4"><div class="empty">暂无近期回款</div></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card card-pad" style="margin-top:18px">
+  <div class="section-head">
+    <div><h2 class="card-title">最近商机</h2><p class="card-sub">按创建时间倒序，点击进入商机详情跟进。</p></div>
+    <a class="btn btn-ghost btn-sm" href="/md/opportunity">全部商机</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>商机编号</th><th>商机名称</th><th>客户</th><th>阶段</th><th>金额</th><th>预计签约</th><th>负责人</th><th>状态</th></tr></thead>
+      <tbody>
+      {% for o in recent_opps %}
+        <tr>
+          <td><a href="/detail/opportunity/{{ o.id }}">{{ o.opportunity_no }}</a></td>
+          <td>{{ o.name }}</td>
+          <td>{{ o.customer_name or '' }}</td>
+          <td>{{ o.stage }} / {{ o.stage_rate }}%</td>
+          <td>{{ "{:,.0f}".format(o.amount or 0) }}</td>
+          <td>{{ o.expected_sign_date or '' }}</td>
+          <td>{{ o.owner_name or '' }}</td>
+          <td>
+            {% if o.status == 'WON' %}<span class="badge badge-green">赢单</span>
+            {% elif o.status == 'LOST' %}<span class="badge badge-red">输单</span>
+            {% else %}<span class="badge badge-blue">进行中</span>{% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8"><div class="empty">暂无商机</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

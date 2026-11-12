@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}回款视图 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">回款视图</h1>
+    <div class="page-desc">按合同里程碑查看开票、回款、应收与逾期；数据来自统一合同台账。</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/crm">CRM 看板</a>
+    <a class="btn btn-ghost" href="/md/contract">合同台账</a>
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="card kpi"><div class="kpi-ico">📜</div><div class="kpi-label">合同总额</div><div class="kpi-value">{{ "{:,.0f}".format(totals.contract) }}</div><div class="kpi-foot">单位：元</div></div>
+  <div class="card kpi"><div class="kpi-ico">🧾</div><div class="kpi-label">已开票金额</div><div class="kpi-value">{{ "{:,.0f}".format(totals.invoiced) }}</div><div class="kpi-foot">按里程碑累计</div></div>
+  <div class="card kpi"><div class="kpi-ico">💰</div><div class="kpi-label">已回款金额</div><div class="kpi-value" style="color:#059669">{{ "{:,.0f}".format(totals.paid) }}</div><div class="kpi-foot">按里程碑累计</div></div>
+  <div class="card kpi"><div class="kpi-ico">📊</div><div class="kpi-label">应收余额</div><div class="kpi-value">{{ "{:,.0f}".format(totals.outstanding) }}</div><div class="kpi-foot">里程碑金额 - 已回款</div></div>
+  <div class="card kpi"><div class="kpi-ico">⏰</div><div class="kpi-label">逾期金额</div><div class="kpi-value" style="color:#dc2626">{{ "{:,.0f}".format(totals.overdue) }}</div><div class="kpi-foot">已过预计回款日</div></div>
+</div>
+
+<div class="card card-pad">
+  <div class="toolbar">
+    <form class="search" method="get" action="/crm/payment">
+      <input class="input" name="q" value="{{ q }}" placeholder="搜索合同编号 / 合同名称 / 客户"/>
+      <select class="select" name="status" style="width:150px">
+        <option value="">全部状态</option>
+        <option value="UNPAID" {% if status == 'UNPAID' %}selected{% endif %}>未收款</option>
+        <option value="PARTIAL" {% if status == 'PARTIAL' %}selected{% endif %}>部分收款</option>
+        <option value="PAID" {% if status == 'PAID' %}selected{% endif %}>已收款</option>
+        <option value="OVERDUE" {% if status == 'OVERDUE' %}selected{% endif %}>已逾期</option>
+      </select>
+      <button class="btn btn-ghost" type="submit">筛选</button>
+      {% if q or status %}<a class="btn btn-ghost" href="/crm/payment">清空</a>{% endif %}
+    </form>
+    <span class="muted">共 {{ items|length }} 条里程碑</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>合同编号</th><th>客户</th><th>里程碑</th><th>金额</th><th>已开票</th><th>已回款</th><th>应收余额</th><th>预计回款</th><th>状态</th><th class="right">操作</th></tr></thead>
+      <tbody>
+      {% for item in items %}
+        {% set m = item.milestone %}
+        {% set c = item.contract %}
+        <tr>
+          <td><a href="/detail/contract/{{ c.id }}">{{ c.contract_no }}</a></td>
+          <td>{{ c.customer_name or '' }}</td>
+          <td><b>{{ m.milestone_name }}</b><div class="muted" style="font-size:11.5px">{{ m.milestone_code or '' }}</div></td>
+          <td>{{ "{:,.2f}".format(item.amount) }}</td>
+          <td>{{ "{:,.2f}".format(item.invoiced) }}</td>
+          <td>{{ "{:,.2f}".format(item.paid) }}</td>
+          <td><b>{{ "{:,.2f}".format(item.outstanding) }}</b></td>
+          <td class="{% if item.overdue %}muted{% endif %}">{{ m.expected_payment_date or '' }}</td>
+          <td>
+            {% if item.status == 'PAID' %}<span class="badge badge-green">已收款</span>
+            {% elif item.status == 'PARTIAL' %}<span class="badge badge-amber">部分收款</span>
+            {% elif item.status == 'OVERDUE' %}<span class="badge badge-red">已逾期</span>
+            {% else %}<span class="badge badge-gray">未收款</span>{% endif %}
+          </td>
+          <td class="right">
+            <a class="btn btn-ghost btn-sm" href="/md/contract_milestone/{{ m.id }}/edit">编辑</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="10"><div class="empty">暂无回款数据</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
@@ -23,20 +23,24 @@ from .crud import (
     soft_delete,
     update_record,
 )
-from .metadata import ENTITIES
+from .metadata import ENTITIES, OPP_STAGE_OPTS
 from .models import (
     AuditLog,
     Company,
     Contract,
     ContractMilestone,
+    ContractOpportunity,
     ContractProject,
     Customer,
     CustomerAddress,
     CustomerContact,
+    CustomerFollower,
     Dict,
     DictItem,
     Employee,
     IdMapping,
+    Opportunity,
+    OpportunityFollow,
     Org,
     Position,
     Product,
@@ -118,6 +122,43 @@ def require_perm(db, request, perm):
     if not has_permission(db, user, perm):
         return False
     return True
+
+
+def enrich_values(db: Session, values: dict):
+    """补齐常用名称快照，避免用户重复录入。"""
+    def fill(id_key, name_key, model):
+        raw = values.get(id_key)
+        if not raw or values.get(name_key):
+            return
+        try:
+            row = db.get(model, int(raw))
+        except (TypeError, ValueError):
+            row = None
+        if row:
+            if model is Customer:
+                values[name_key] = row.customer_name
+            elif model is Employee:
+                values[name_key] = row.employee_name
+            elif model is Product:
+                values[name_key] = row.product_name
+            elif model is Opportunity:
+                values[name_key] = row.name
+
+    fill("customer_id", "customer_name", Customer)
+    fill("product_id", "product_name", Product)
+    fill("opportunity_id", "opportunity_name", Opportunity)
+    for id_key, name_key in [
+        ("owner_id", "owner_name"),
+        ("sales_person_id", "sales_person_name"),
+        ("sales_manager_id", "sales_manager_name"),
+        ("sales_id", "sales_name"),
+        ("manager_id", "manager_name"),
+        ("pm_id", "pm_name"),
+        ("employee_id", "employee_name"),
+        ("follower_id", "follower_name"),
+    ]:
+        fill(id_key, name_key, Employee)
+    return values
 
 
 def render_error(request: Request, db: Session, message: str, status_code: int = 400):
@@ -296,6 +337,271 @@ def audit_page(request: Request, db: Session = Depends(get_db), page: int = 1):
     )
 
 
+@app.get("/crm", response_class=HTMLResponse)
+def crm_dashboard(request: Request, db: Session = Depends(get_db)):
+    if not require_perm(db, request, "crm.dashboard.view"):
+        return render_error(request, db, "没有访问 CRM 看板的权限", 403)
+    today = date.today()
+    soon = today + timedelta(days=30)
+    pipeline_total = (
+        db.query(func.coalesce(func.sum(Opportunity.amount), 0))
+        .filter(Opportunity.deleted == 0, Opportunity.status == "IN_PROGRESS")
+        .scalar()
+        or 0
+    )
+    won_total = (
+        db.query(func.coalesce(func.sum(Opportunity.amount), 0))
+        .filter(Opportunity.deleted == 0, Opportunity.status == "WON")
+        .scalar()
+        or 0
+    )
+    signed_total = (
+        db.query(func.coalesce(func.sum(Contract.contract_amount), 0))
+        .filter(Contract.deleted == 0, Contract.sign_status == "SIGNED")
+        .scalar()
+        or 0
+    )
+
+    milestones = db.query(ContractMilestone).filter(ContractMilestone.deleted == 0).all()
+    outstanding_total = 0.0
+    overdue_total = 0.0
+    overdue_count = 0
+    for m in milestones:
+        amount = float(m.milestone_amount or 0)
+        paid = float(m.paid_amount or m.actual_payment_amount or 0)
+        left = max(amount - paid, 0)
+        outstanding_total += left
+        if left > 0 and m.expected_payment_date and m.expected_payment_date < today:
+            overdue_total += left
+            overdue_count += 1
+
+    funnel = []
+    for stage in OPP_STAGE_OPTS:
+        count = (
+            db.query(Opportunity)
+            .filter(Opportunity.deleted == 0, Opportunity.stage == stage["value"])
+            .count()
+        )
+        amount = (
+            db.query(func.coalesce(func.sum(Opportunity.amount), 0))
+            .filter(Opportunity.deleted == 0, Opportunity.stage == stage["value"])
+            .scalar()
+            or 0
+        )
+        funnel.append({"code": stage["value"], "label": stage["label"], "count": count, "amount": amount})
+
+    recent_opps = (
+        db.query(Opportunity)
+        .filter(Opportunity.deleted == 0)
+        .order_by(Opportunity.id.desc())
+        .limit(8)
+        .all()
+    )
+    upcoming = (
+        db.query(ContractMilestone, Contract)
+        .join(Contract, Contract.id == ContractMilestone.contract_id)
+        .filter(
+            ContractMilestone.deleted == 0,
+            Contract.deleted == 0,
+            ContractMilestone.payment_status != "PAID",
+            ContractMilestone.expected_payment_date.isnot(None),
+            ContractMilestone.expected_payment_date <= soon,
+        )
+        .order_by(ContractMilestone.expected_payment_date.asc())
+        .limit(8)
+        .all()
+    )
+    counts = {
+        "customer": db.query(Customer).filter(Customer.deleted == 0).count(),
+        "opportunity": db.query(Opportunity).filter(Opportunity.deleted == 0).count(),
+        "contract": db.query(Contract).filter(Contract.deleted == 0).count(),
+        "overdue": overdue_count,
+    }
+    return templates.TemplateResponse(
+        request=request,
+        name="crm_dashboard.html",
+        context=page_ctx(
+            request,
+            db,
+            counts=counts,
+            pipeline_total=pipeline_total,
+            won_total=won_total,
+            signed_total=signed_total,
+            outstanding_total=outstanding_total,
+            overdue_total=overdue_total,
+            funnel=funnel,
+            recent_opps=recent_opps,
+            upcoming=upcoming,
+            today=today,
+        ),
+    )
+
+
+@app.get("/crm/payment", response_class=HTMLResponse)
+def crm_payment(request: Request, db: Session = Depends(get_db), q: str = "", status: str = ""):
+    if not require_perm(db, request, "crm.payment.view"):
+        return render_error(request, db, "没有访问回款视图的权限", 403)
+    today = date.today()
+    query = (
+        db.query(ContractMilestone, Contract)
+        .join(Contract, Contract.id == ContractMilestone.contract_id)
+        .filter(ContractMilestone.deleted == 0, Contract.deleted == 0)
+    )
+    if q:
+        query = query.filter(
+            or_(
+                Contract.contract_no.ilike(f"%{q}%"),
+                Contract.contract_name.ilike(f"%{q}%"),
+                Contract.customer_name.ilike(f"%{q}%"),
+            )
+        )
+    rows = query.order_by(ContractMilestone.expected_payment_date.asc(), ContractMilestone.id.asc()).all()
+    items = []
+    totals = {"contract": 0.0, "invoiced": 0.0, "paid": 0.0, "outstanding": 0.0, "overdue": 0.0}
+    seen_contracts = set()
+    for m, c in rows:
+        amount = float(m.milestone_amount or 0)
+        paid = float(m.paid_amount or m.actual_payment_amount or 0)
+        invoiced = float(m.invoiced_amount or 0)
+        outstanding = max(amount - paid, 0)
+        if amount > 0 and paid >= amount:
+            computed = "PAID"
+        elif paid > 0:
+            computed = "PARTIAL"
+        elif m.expected_payment_date and m.expected_payment_date < today:
+            computed = "OVERDUE"
+        else:
+            computed = "UNPAID"
+        if status and computed != status:
+            continue
+        if c.id not in seen_contracts:
+            totals["contract"] += float(c.contract_amount or 0)
+            seen_contracts.add(c.id)
+        totals["invoiced"] += invoiced
+        totals["paid"] += paid
+        totals["outstanding"] += outstanding
+        if computed == "OVERDUE":
+            totals["overdue"] += outstanding
+        items.append(
+            {
+                "milestone": m,
+                "contract": c,
+                "amount": amount,
+                "paid": paid,
+                "invoiced": invoiced,
+                "outstanding": outstanding,
+                "status": computed,
+                "overdue": computed == "OVERDUE",
+            }
+        )
+    return templates.TemplateResponse(
+        request=request,
+        name="crm_payment.html",
+        context=page_ctx(
+            request,
+            db,
+            items=items,
+            totals=totals,
+            q=q,
+            status=status,
+            today=today,
+        ),
+    )
+
+
+@app.post("/crm/opportunity/{opportunity_id}/convert")
+def crm_convert_opportunity(request: Request, opportunity_id: int, db: Session = Depends(get_db)):
+    if not require_perm(db, request, "md.opportunity.edit"):
+        return render_error(request, db, "没有商机转合同的权限", 403)
+    opp = db.query(Opportunity).filter(Opportunity.id == opportunity_id, Opportunity.deleted == 0).first()
+    if not opp:
+        return render_error(request, db, "商机不存在或已删除", 404)
+    existing = (
+        db.query(ContractOpportunity)
+        .filter(
+            ContractOpportunity.opportunity_id == opp.id,
+            ContractOpportunity.deleted == 0,
+        )
+        .first()
+    )
+    if existing:
+        return RedirectResponse(f"/detail/contract/{existing.contract_id}", status_code=302)
+    base_no = f"HT{datetime.now().strftime('%Y%m%d')}{opp.id:03d}"
+    contract_no = base_no
+    suffix = 1
+    while (
+        db.query(Contract)
+        .filter(
+            Contract.company_id == opp.company_id,
+            Contract.contract_no == contract_no,
+            Contract.deleted == 0,
+        )
+        .first()
+    ):
+        suffix += 1
+        contract_no = f"{base_no}-{suffix}"
+    contract = Contract(
+        company_id=opp.company_id or 1,
+        contract_no=contract_no,
+        sub_contract_no="",
+        contract_name=opp.name if opp.name.endswith("合同") else f"{opp.name}合同",
+        contract_type_code="CONSULTING",
+        contract_type_name="咨询服务",
+        contract_category="SALES",
+        customer_id=opp.customer_id,
+        customer_name=opp.customer_name,
+        org_id=None,
+        org_code=None,
+        org_name=None,
+        manager_id=opp.owner_id,
+        manager_name=opp.owner_name,
+        sales_manager_id=opp.sales_person_id,
+        sales_manager_name=opp.sales_person_name,
+        owner_id=opp.owner_id,
+        owner_name=opp.owner_name,
+        contract_amount=opp.amount or 0,
+        currency="CNY",
+        exchange_rate=1,
+        tax_rate=0,
+        tax_amount=0,
+        amount_excl_tax=opp.amount or 0,
+        amount_incl_tax=opp.amount or 0,
+        approval_status="DRAFT",
+        sign_status="UNSIGNED",
+        execution_status="NOT_STARTED",
+        invoice_status="NOT_STARTED",
+        payment_status="UNPAID",
+        contract_version_no="V1.0",
+        data_status="ACTIVE",
+        source_type="CRM",
+        remark=f"由商机 {opp.opportunity_no} 转入",
+    )
+    db.add(contract)
+    db.flush()
+    db.add(
+        ContractOpportunity(
+            company_id=contract.company_id,
+            contract_id=contract.id,
+            opportunity_id=opp.id,
+        )
+    )
+    opp.stage = "STAGE_06"
+    opp.stage_rate = 90
+    opp.status = "IN_PROGRESS"
+    user = get_current_user(request, db)
+    audit(
+        db,
+        user,
+        "CONVERT",
+        "opportunity",
+        opp.id,
+        f"商机 {opp.opportunity_no} 转合同 {contract.contract_no}",
+        request.client.host if request.client else "",
+    )
+    db.commit()
+    return RedirectResponse(f"/detail/contract/{contract.id}", status_code=302)
+
+
 @app.get("/md/{entity_key}", response_class=HTMLResponse)
 def entity_list(
     request: Request,
@@ -405,6 +711,7 @@ async def entity_create(request: Request, entity_key: str, db: Session = Depends
     if errors:
         ctx = _form_context(request, db, ent, values={k: form.get(k) for k in form}, error="；".join(errors))
         return templates.TemplateResponse(request=request, name="form.html", context=ctx, status_code=400)
+    enrich_values(db, values)
     user = get_current_user(request, db)
     try:
         record = create_record(db, ent, values, user.username if user else "system")
@@ -450,6 +757,7 @@ async def entity_update(request: Request, entity_key: str, record_id: int, db: S
     if errors:
         ctx = _form_context(request, db, ent, record=record, values={k: form.get(k) for k in form}, error="；".join(errors))
         return templates.TemplateResponse(request=request, name="form.html", context=ctx, status_code=400)
+    enrich_values(db, values)
     user = get_current_user(request, db)
     try:
         update_record(db, ent, record, values, user.username if user else "system")
@@ -516,11 +824,33 @@ def entity_detail(request: Request, entity_key: str, record_id: int, db: Session
             .order_by(Contract.id.desc())
             .all()
         )
+        followers = (
+            db.query(CustomerFollower)
+            .filter(CustomerFollower.customer_id == record.id, CustomerFollower.deleted == 0)
+            .order_by(CustomerFollower.is_primary.desc(), CustomerFollower.id.asc())
+            .all()
+        )
+        opportunities = (
+            db.query(Opportunity)
+            .filter(Opportunity.customer_id == record.id, Opportunity.deleted == 0)
+            .order_by(Opportunity.id.desc())
+            .all()
+        )
         return templates.TemplateResponse(
             request=request,
             name="customer_detail.html",
             context=page_ctx(
-                request, db, ent=ent, record=record, contacts=contacts, addresses=addresses, projects=projects, contracts=contracts
+                request,
+                db,
+                ent=ent,
+                record=record,
+                contacts=contacts,
+                addresses=addresses,
+                projects=projects,
+                contracts=contracts,
+                followers=followers,
+                opportunities=opportunities,
+                message=request.query_params.get("message", ""),
             ),
         )
 
@@ -556,10 +886,60 @@ def entity_detail(request: Request, entity_key: str, record_id: int, db: Session
             .filter(ContractProject.contract_id == record.id, ContractProject.deleted == 0, Project.deleted == 0)
             .all()
         )
+        opportunities = (
+            db.query(ContractOpportunity, Opportunity)
+            .join(Opportunity, Opportunity.id == ContractOpportunity.opportunity_id)
+            .filter(
+                ContractOpportunity.contract_id == record.id,
+                ContractOpportunity.deleted == 0,
+                Opportunity.deleted == 0,
+            )
+            .all()
+        )
         return templates.TemplateResponse(
             request=request,
             name="contract_detail.html",
-            context=page_ctx(request, db, ent=ent, record=record, milestones=milestones, links=links),
+            context=page_ctx(
+                request,
+                db,
+                ent=ent,
+                record=record,
+                milestones=milestones,
+                links=links,
+                opportunities=opportunities,
+                message=request.query_params.get("message", ""),
+            ),
+        )
+
+    if entity_key == "opportunity":
+        follows = (
+            db.query(OpportunityFollow)
+            .filter(OpportunityFollow.opportunity_id == record.id, OpportunityFollow.deleted == 0)
+            .order_by(OpportunityFollow.follow_time.desc(), OpportunityFollow.id.desc())
+            .all()
+        )
+        links = (
+            db.query(ContractOpportunity, Contract)
+            .join(Contract, Contract.id == ContractOpportunity.contract_id)
+            .filter(
+                ContractOpportunity.opportunity_id == record.id,
+                ContractOpportunity.deleted == 0,
+                Contract.deleted == 0,
+            )
+            .all()
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="opportunity_detail.html",
+            context=page_ctx(
+                request,
+                db,
+                ent=ent,
+                record=record,
+                follows=follows,
+                links=links,
+                message=request.query_params.get("message", ""),
+            ),
         )
 
     fk_maps = get_fk_maps(db, ent, [record])
@@ -583,6 +963,9 @@ def api_stats(db: Session = Depends(get_db)):
         "position": db.query(Position).filter(Position.deleted == 0).count(),
         "employee": db.query(Employee).filter(Employee.deleted == 0).count(),
         "customer": db.query(Customer).filter(Customer.deleted == 0).count(),
+        "opportunity": db.query(Opportunity).filter(Opportunity.deleted == 0).count(),
+        "opportunity_follow": db.query(OpportunityFollow).filter(OpportunityFollow.deleted == 0).count(),
+        "customer_follower": db.query(CustomerFollower).filter(CustomerFollower.deleted == 0).count(),
         "project": db.query(Project).filter(Project.deleted == 0).count(),
         "contract": db.query(Contract).filter(Contract.deleted == 0).count(),
         "product": db.query(Product).filter(Product.deleted == 0).count(),
