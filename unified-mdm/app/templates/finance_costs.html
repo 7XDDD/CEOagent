@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}成本录入 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">成本录入</h1>
+    <div class="page-desc">按项目录入人工、费用、分包成本；保存后自动汇总回项目损益与财务看板。</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/fin/projects">项目损益</a>
+    <a class="btn btn-ghost" href="/fin">财务看板</a>
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="card kpi"><div class="kpi-ico">🧮</div><div class="kpi-label">成本合计</div><div class="kpi-value">{{ "{:,.0f}".format(totals.all) }}</div><div class="kpi-foot">{{ costs|length }} 条明细</div></div>
+  <div class="card kpi"><div class="kpi-ico">👤</div><div class="kpi-label">人工成本</div><div class="kpi-value">{{ "{:,.0f}".format(totals.labor) }}</div><div class="kpi-foot">项目人工投入</div></div>
+  <div class="card kpi"><div class="kpi-ico">🧾</div><div class="kpi-label">费用成本</div><div class="kpi-value">{{ "{:,.0f}".format(totals.expense) }}</div><div class="kpi-foot">差旅、会议、采购</div></div>
+  <div class="card kpi"><div class="kpi-ico">🤝</div><div class="kpi-label">分包成本</div><div class="kpi-value">{{ "{:,.0f}".format(totals.subcontract) }}</div><div class="kpi-foot">外部合作投入</div></div>
+</div>
+
+{% if can_edit %}
+<div class="card card-pad">
+  <div class="section-head"><div><h2 class="card-title">录入成本</h2><p class="card-sub">项目、类型、金额必填；供应商和员工按类型填写。</p></div></div>
+  <form method="post" action="/fin/costs">
+    <div class="form-grid">
+      <div class="field">
+        <label>项目 <span class="req">*</span></label>
+        <select class="select" name="project_id" required>
+          <option value="">请选择项目</option>
+          {% for p in projects %}
+          <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.project_code }} · {{ p.project_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>成本类型 <span class="req">*</span></label>
+        <select class="select" name="cost_type" required>
+          {% for t in cost_types %}
+          <option value="{{ t.value }}" {% if cost_type == t.value %}selected{% endif %}>{{ t.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>成本日期 <span class="req">*</span></label>
+        <input class="input" type="date" name="cost_date" value="{{ now().strftime('%Y-%m-%d') }}" required/>
+      </div>
+      <div class="field">
+        <label>金额（元） <span class="req">*</span></label>
+        <input class="input" type="number" step="0.01" min="0.01" name="amount" placeholder="例如 60000" required/>
+      </div>
+      <div class="field">
+        <label>成本科目</label>
+        <input class="input" name="cost_category" placeholder="例如 项目人工 / 差旅办公 / 外包服务"/>
+      </div>
+      <div class="field">
+        <label>供应商</label>
+        <input class="input" name="supplier_name" placeholder="费用或分包供应商"/>
+      </div>
+      <div class="field">
+        <label>关联员工</label>
+        <select class="select" name="employee_id">
+          <option value="">不关联</option>
+          {% for e in employees %}
+          <option value="{{ e.id }}">{{ e.job_number }} · {{ e.employee_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>备注</label>
+        <input class="input" name="remark" placeholder="成本说明"/>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">保存成本</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<div class="card card-pad" style="margin-top:18px">
+  <div class="toolbar">
+    <form class="search" method="get" action="/fin/costs">
+      <input class="input" name="q" value="{{ q }}" placeholder="搜索项目 / 供应商 / 员工 / 备注"/>
+      <select class="select" name="project_id" style="width:220px">
+        <option value="">全部项目</option>
+        {% for p in projects %}
+        <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.project_code }} · {{ p.project_name }}</option>
+        {% endfor %}
+      </select>
+      <select class="select" name="cost_type" style="width:130px">
+        <option value="">全部类型</option>
+        {% for t in cost_types %}
+        <option value="{{ t.value }}" {% if cost_type == t.value %}selected{% endif %}>{{ t.label }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-ghost" type="submit">筛选</button>
+      {% if q or project_id or cost_type %}<a class="btn btn-ghost" href="/fin/costs">清空</a>{% endif %}
+    </form>
+    <span class="muted">共 {{ costs|length }} 条成本</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>日期</th><th>项目</th><th>类型</th><th>科目</th><th>金额</th><th>供应商 / 员工</th><th>来源</th><th>备注</th><th class="right">操作</th></tr></thead>
+      <tbody>
+      {% for c in costs %}
+        <tr>
+          <td>{{ c.cost_date or '' }}</td>
+          <td><a href="/fin/projects/{{ c.project_id }}">{{ c.project_code }}</a><div class="muted" style="font-size:11.5px">{{ c.project_name }}</div></td>
+          <td>
+            {% if c.cost_type == 'LABOR' %}<span class="badge badge-blue">人工成本</span>
+            {% elif c.cost_type == 'EXPENSE' %}<span class="badge badge-amber">费用成本</span>
+            {% elif c.cost_type == 'SUBCONTRACT' %}<span class="badge badge-gray">分包成本</span>
+            {% else %}<span class="badge badge-gray">其他成本</span>{% endif %}
+          </td>
+          <td>{{ c.cost_category or '' }}</td>
+          <td><b>{{ "{:,.2f}".format(c.amount or 0) }}</b></td>
+          <td>{{ c.supplier_name or c.employee_name or '' }}</td>
+          <td>{{ c.source }}</td>
+          <td class="muted">{{ c.remark or '' }}</td>
+          <td class="right">
+            {% if can_edit %}
+            <form method="post" action="/fin/costs/{{ c.id }}/delete" onsubmit="return confirm('确认删除该成本？');" style="display:inline">
+              <button class="btn btn-danger btn-sm">删除</button>
+            </form>
+            {% else %}
+            <span class="muted">只读</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9"><div class="empty">暂无成本明细</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}{{ project.project_name }} · 项目损益{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{{ project.project_name }}</h1>
+    <div class="page-desc">{{ project.project_code }} · {{ project.customer_name or '' }} · {{ project.pm_name or '' }}</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/fin/projects">返回项目损益</a>
+    <a class="btn btn-ghost" href="/detail/project/{{ project.id }}">项目详情</a>
+    {% if can_edit %}<a class="btn btn-primary" href="/fin/costs?project_id={{ project.id }}">+ 录入成本</a>{% endif %}
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="card kpi"><div class="kpi-ico">📜</div><div class="kpi-label">合同金额</div><div class="kpi-value">{{ "{:,.0f}".format(stats.contract_amount) }}</div><div class="kpi-foot">{{ stats.contracts|length }} 份关联合同</div></div>
+  <div class="card kpi"><div class="kpi-ico">🧾</div><div class="kpi-label">确认收入</div><div class="kpi-value">{{ "{:,.0f}".format(stats.revenue) }}</div><div class="kpi-foot">已开票收入</div></div>
+  <div class="card kpi"><div class="kpi-ico">💰</div><div class="kpi-label">已回款</div><div class="kpi-value" style="color:var(--green)">{{ "{:,.0f}".format(stats.paid) }}</div><div class="kpi-foot">应收 {{ "{:,.0f}".format(stats.outstanding) }}</div></div>
+  <div class="card kpi"><div class="kpi-ico">🧮</div><div class="kpi-label">项目成本</div><div class="kpi-value">{{ "{:,.0f}".format(stats.total_cost) }}</div><div class="kpi-foot">人工 {{ "{:,.0f}".format(stats.labor_cost) }} / 费用 {{ "{:,.0f}".format(stats.expense_cost) }}</div></div>
+  <div class="card kpi"><div class="kpi-ico">📈</div><div class="kpi-label">项目毛利</div><div class="kpi-value" style="color:{{ 'var(--red)' if stats.gross_profit < 0 else 'var(--green)' }}">{{ "{:,.0f}".format(stats.gross_profit) }}</div><div class="kpi-foot">收入 - 总成本</div></div>
+  <div class="card kpi"><div class="kpi-ico">🎯</div><div class="kpi-label">毛利率</div><div class="kpi-value">{{ "{:.1f}%".format(stats.gross_margin * 100) if stats.gross_margin is not none else '-' }}</div><div class="kpi-foot">项目盈利水平</div></div>
+  <div class="card kpi"><div class="kpi-ico">📊</div><div class="kpi-label">预算使用率</div><div class="kpi-value" style="color:{{ 'var(--red)' if stats.budget_usage and stats.budget_usage > 1 else 'var(--ink)' }}">{{ "{:.1f}%".format(stats.budget_usage * 100) if stats.budget_usage is not none else '-' }}</div><div class="kpi-foot">成本预算 {{ "{:,.0f}".format(stats.budget_cost) }}</div></div>
+  <div class="card kpi"><div class="kpi-ico">⏰</div><div class="kpi-label">逾期应收</div><div class="kpi-value" style="color:var(--red)">{{ "{:,.0f}".format(stats.overdue) }}</div><div class="kpi-foot">未开票 {{ "{:,.0f}".format(stats.unbilled) }}</div></div>
+</div>
+
+<div class="card card-pad">
+  <div class="detail-grid">
+    <div class="detail-item"><div class="k">项目编码</div><div class="v">{{ project.project_code }}</div></div>
+    <div class="detail-item"><div class="k">客户</div><div class="v">{{ project.customer_name or '' }}</div></div>
+    <div class="detail-item"><div class="k">项目经理</div><div class="v">{{ project.pm_name or '' }}</div></div>
+    <div class="detail-item"><div class="k">所属组织</div><div class="v">{{ project.org_name or '' }}</div></div>
+    <div class="detail-item"><div class="k">项目状态</div><div class="v">{{ project.status }} · {{ project.progress }}%</div></div>
+    <div class="detail-item"><div class="k">计划周期</div><div class="v">{{ project.planned_start_date or '' }} ~ {{ project.planned_end_date or '' }}</div></div>
+    <div class="detail-item"><div class="k">合同金额</div><div class="v">{{ "{:,.2f}".format(project.contract_amount or 0) }} 元</div></div>
+    <div class="detail-item"><div class="k">项目预算</div><div class="v">{{ "{:,.2f}".format(project.budget_amount or 0) }} 元</div></div>
+    <div class="detail-item"><div class="k">成本偏差</div><div class="v" style="color:{{ 'var(--red)' if stats.cost_variance < 0 else 'var(--green)' }}">{{ "{:,.2f}".format(stats.cost_variance) }} 元</div></div>
+  </div>
+</div>
+
+<div class="grid-2" style="margin-top:18px">
+  <div class="card card-pad">
+    <div class="section-head"><div><h2 class="card-title">月度收入与成本</h2><p class="card-sub">按开票月份和成本发生月份汇总。</p></div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>月份</th><th>收入</th><th>成本</th><th>毛利</th></tr></thead>
+        <tbody>
+        {% for m in monthly %}
+          <tr><td>{{ m.month }}</td><td>{{ "{:,.0f}".format(m.revenue) }}</td><td>{{ "{:,.0f}".format(m.cost) }}</td><td style="color:{{ 'var(--red)' if m.gross_profit < 0 else 'var(--green)' }}">{{ "{:,.0f}".format(m.gross_profit) }}</td></tr>
+        {% else %}
+          <tr><td colspan="4"><div class="empty">暂无月度数据</div></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card card-pad">
+    <div class="section-head"><div><h2 class="card-title">预算 vs 实际</h2><p class="card-sub">项目预算按收入、人工、费用、分包拆解。</p></div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>科目</th><th>预算</th><th>实际</th><th>执行率</th></tr></thead>
+        <tbody>
+          <tr><td>营业收入</td><td>{{ "{:,.0f}".format(stats.budget_revenue) }}</td><td>{{ "{:,.0f}".format(stats.revenue) }}</td><td>{% if stats.budget_revenue %}{{ "{:.1f}%".format(stats.revenue / stats.budget_revenue * 100) }}{% else %}-{% endif %}</td></tr>
+          <tr><td>人工成本</td><td>{{ "{:,.0f}".format(stats.budget_labor) }}</td><td>{{ "{:,.0f}".format(stats.labor_cost) }}</td><td>{% if stats.budget_labor %}{{ "{:.1f}%".format(stats.labor_cost / stats.budget_labor * 100) }}{% else %}-{% endif %}</td></tr>
+          <tr><td>费用成本</td><td>{{ "{:,.0f}".format(stats.budget_expense) }}</td><td>{{ "{:,.0f}".format(stats.expense_cost) }}</td><td>{% if stats.budget_expense %}{{ "{:.1f}%".format(stats.expense_cost / stats.budget_expense * 100) }}{% else %}-{% endif %}</td></tr>
+          <tr><td>分包成本</td><td>{{ "{:,.0f}".format(stats.budget_subcontract) }}</td><td>{{ "{:,.0f}".format(stats.subcontract_cost) }}</td><td>{% if stats.budget_subcontract %}{{ "{:.1f}%".format(stats.subcontract_cost / stats.budget_subcontract * 100) }}{% else %}-{% endif %}</td></tr>
+          <tr><td><b>成本合计</b></td><td><b>{{ "{:,.0f}".format(stats.budget_cost) }}</b></td><td><b>{{ "{:,.0f}".format(stats.total_cost) }}</b></td><td><b>{{ "{:.1f}%".format(stats.budget_usage * 100) if stats.budget_usage is not none else '-' }}</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card card-pad" style="margin-top:18px">
+  <div class="section-head">
+    <div><h2 class="card-title">成本明细</h2><p class="card-sub">人工、费用、分包成本按发生日期归集；录入后自动回写项目成本。</p></div>
+    {% if can_edit %}<a class="btn btn-primary btn-sm" href="/fin/costs?project_id={{ project.id }}">+ 录入成本</a>{% endif %}
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>日期</th><th>类型</th><th>科目</th><th>金额</th><th>供应商 / 员工</th><th>来源</th><th>备注</th></tr></thead>
+      <tbody>
+      {% for c in costs %}
+        <tr>
+          <td>{{ c.cost_date or '' }}</td>
+          <td><span class="badge {{ 'badge-blue' if c.cost_type == 'LABOR' else ('badge-amber' if c.cost_type == 'EXPENSE' else 'badge-gray') }}">{{ c.cost_type }}</span></td>
+          <td>{{ c.cost_category or '' }}</td>
+          <td><b>{{ "{:,.2f}".format(c.amount or 0) }}</b></td>
+          <td>{{ c.supplier_name or c.employee_name or '' }}</td>
+          <td>{{ c.source }}</td>
+          <td class="muted">{{ c.remark or '' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7"><div class="empty">暂无成本明细，点击右上角录入。</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card card-pad" style="margin-top:18px">
+  <div class="section-head"><div><h2 class="card-title">关联合同与收入</h2><p class="card-sub">合同金额、已开票、已回款、应收与逾期。</p></div></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>合同编号</th><th>合同名称</th><th>合同金额</th><th>已开票</th><th>已回款</th><th>应收</th><th>逾期</th></tr></thead>
+      <tbody>
+      {% for row in stats.contracts %}
+        <tr>
+          <td><a href="/detail/contract/{{ row.contract.id }}">{{ row.contract.contract_no }}</a></td>
+          <td>{{ row.contract.contract_name }}</td>
+          <td>{{ "{:,.0f}".format(row.contract_amount) }}</td>
+          <td>{{ "{:,.0f}".format(row.invoiced) }}</td>
+          <td>{{ "{:,.0f}".format(row.paid) }}</td>
+          <td>{{ "{:,.0f}".format(row.outstanding) }}</td>
+          <td style="color:{{ 'var(--red)' if row.overdue > 0 else 'var(--muted)' }}">{{ "{:,.0f}".format(row.overdue) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7"><div class="empty">暂无关联合同</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

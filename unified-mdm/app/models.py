@@ -663,5 +663,62 @@ class IdMapping(Base, AuditMixin):
     )
 
 
+class FinanceCost(Base, AuditMixin):
+    __tablename__ = "fin_cost"
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, default=1)
+    project_id = Column(Integer, nullable=False)
+    project_code = Column(String(64))
+    project_name = Column(String(128))
+    contract_id = Column(Integer)
+    contract_no = Column(String(100))
+    customer_id = Column(Integer)
+    customer_name = Column(String(200))
+    org_id = Column(Integer)
+    org_name = Column(String(128))
+    cost_type = Column(String(32), default="LABOR")
+    cost_category = Column(String(64))
+    cost_date = Column(Date, nullable=False)
+    period = Column(String(7))
+    amount = Column(Numeric(18, 2), default=0)
+    supplier_name = Column(String(200))
+    employee_id = Column(Integer)
+    employee_name = Column(String(64))
+    source = Column(String(32), default="MANUAL")
+    status = Column(String(20), default="CONFIRMED")
+    remark = Column(String(512))
+    __table_args__ = (
+        Index("idx_fin_cost_project", "project_id"),
+        Index("idx_fin_cost_date", "cost_date"),
+    )
+
+
+class FinanceBudget(Base, AuditMixin):
+    __tablename__ = "fin_budget"
+    id = Column(Integer, primary_key=True)
+    company_id = Column(Integer, default=1)
+    budget_year = Column(Integer, nullable=False)
+    budget_type = Column(String(20), default="PROJECT")
+    project_id = Column(Integer)
+    project_code = Column(String(64))
+    project_name = Column(String(128))
+    org_id = Column(Integer)
+    org_name = Column(String(128))
+    customer_id = Column(Integer)
+    customer_name = Column(String(200))
+    contract_id = Column(Integer)
+    contract_no = Column(String(100))
+    category = Column(String(32), nullable=False)
+    budget_amount = Column(Numeric(18, 2), default=0)
+    version = Column(String(20), default="V1.0")
+    status = Column(String(20), default="APPROVED")
+    remark = Column(String(512))
+    __table_args__ = (
+        Index("idx_fin_budget_year", "budget_year"),
+        Index("idx_fin_budget_project", "project_id"),
+        Index("idx_fin_budget_org", "org_id"),
+    )
+
+
 def init_db():
     Base.metadata.create_all(engine)

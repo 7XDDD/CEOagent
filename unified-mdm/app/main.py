@@ -11,6 +11,26 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from .auth import audit, get_current_user, get_role, has_permission, verify_password
+from .finance import (
+    BUDGET_CATEGORIES,
+    BUDGET_CATEGORY_LABELS,
+    BUDGET_TYPE_LABELS,
+    COST_TYPES,
+    COST_TYPE_LABELS,
+    aging_summary,
+    budget_rows,
+    cashflow_forecast,
+    contract_rows,
+    contract_stats,
+    customer_rows,
+    customer_stats,
+    milestone_rows,
+    overview,
+    project_rows,
+    project_stats,
+    sync_contract_finance_status,
+    sync_project_cost,
+)
 from .crud import (
     create_record,
     display_value,
@@ -38,6 +58,8 @@ from .models import (
     Dict,
     DictItem,
     Employee,
+    FinanceBudget,
+    FinanceCost,
     IdMapping,
     Opportunity,
     OpportunityFollow,
@@ -53,7 +75,7 @@ from .models import (
     User,
     init_db,
 )
-from .seed import seed
+from .seed import ensure_finance_permissions, seed, seed_finance
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -103,6 +125,8 @@ app.add_middleware(
 def startup():
     init_db()
     seed()
+    ensure_finance_permissions()
+    seed_finance()
 
 
 def page_ctx(request: Request, db: Session, **kwargs):
@@ -602,6 +626,585 @@ def crm_convert_opportunity(request: Request, opportunity_id: int, db: Session =
     return RedirectResponse(f"/detail/contract/{contract.id}", status_code=302)
 
 
+@app.get("/fin", response_class=HTMLResponse)
+def fin_dashboard(request: Request, db: Session = Depends(get_db)):
+    if not require_perm(db, request, "fin.dashboard.view"):
+        return render_error(request, db, "没有访问财务中心的权限", 403)
+    data = overview(db)
+    return templates.TemplateResponse(
+        request=request,
+        name="finance_dashboard.html",
+        context=page_ctx(request, db, data=data, today=date.today()),
+    )
+
+
+@app.get("/fin/projects", response_class=HTMLResponse)
+def fin_projects(
+    request: Request,
+    db: Session = Depends(get_db),
+    q: str = "",
+    risk: str = "",
+):
+    if not require_perm(db, request, "fin.project.view"):
+        return render_error(request, db, "没有访问项目损益的权限", 403)
+    rows = project_rows(db, q=q, risk=risk)
+    totals = {
+        "contract": sum(x["contract_amount"] for x in rows),
+        "revenue": sum(x["revenue"] for x in rows),
+        "cost": sum(x["total_cost"] for x in rows),
+        "gross_profit": sum(x["gross_profit"] for x in rows),
+        "loss": len([x for x in rows if x["gross_profit"] < 0 and x["revenue"] > 0]),
+        "over_budget": len([x for x in rows if x["budget_usage"] is not None and x["budget_usage"] > 1]),
+    }
+    return templates.TemplateResponse(
+        request=request,
+        name="finance_projects.html",
+        context=page_ctx(
+            request,
+            db,
+            rows=rows,
+            totals=totals,
+            q=q,
+            risk=risk,
+            message=request.query_params.get("message", ""),
+        ),
+    )
+
+
+@app.get("/fin/projects/{project_id}", response_class=HTMLResponse)
+def fin_project_detail(request: Request, project_id: int, db: Session = Depends(get_db)):
+    if not require_perm(db, request, "fin.project.view"):
+        return render_error(request, db, "没有访问项目损益的权限", 403)
+    project = db.query(Project).filter(Project.id == project_id, Project.deleted == 0).first()
+    if not project:
+        return render_error(request, db, "项目不存在或已删除", 404)
+    stats = project_stats(db, project)
+    costs = sorted(
+        stats["costs"],
+        key=lambda x: (x.cost_date or date.min, x.id),
+        reverse=True,
+    )
+    monthly = {}
+    for link in stats["contracts"]:
+        for m in link["milestones"]:
+            if float(m.invoiced_amount or 0) > 0:
+                key = (m.actual_date or m.plan_date)
+                if key:
+                    key = key.strftime("%Y-%m")
+                    monthly.setdefault(key, {"revenue": 0.0, "cost": 0.0})
+                    monthly[key]["revenue"] += float(m.invoiced_amount or 0)
+    for cost in costs:
+        if cost.cost_date:
+            key = cost.cost_date.strftime("%Y-%m")
+            monthly.setdefault(key, {"revenue": 0.0, "cost": 0.0})
+            monthly[key]["cost"] += float(cost.amount or 0)
+    monthly_rows = [
+        {"month": key, **value, "gross_profit": value["revenue"] - value["cost"]}
+        for key, value in sorted(monthly.items())
+    ]
+    return templates.TemplateResponse(
+        request=request,
+        name="finance_project_detail.html",
+        context=page_ctx(
+            request,
+            db,
+            project=project,
+            stats=stats,
+            costs=costs,
+            monthly=monthly_rows,
+            can_edit=require_perm(db, request, "fin.cost.edit"),
+            message=request.query_params.get("message", ""),
+        ),
+    )
+
+
+@app.get("/fin/receivables", response_class=HTMLResponse)
+def fin_receivables(
+    request: Request,
+    db: Session = Depends(get_db),
+    q: str = "",
+    status: str = "",
+):
+    if not require_perm(db, request, "fin.receivable.view"):
+        return render_error(request, db, "没有访问应收与回款的权限", 403)
+    contracts = contract_rows(db, q=q, status=status)
+    milestones = milestone_rows(db, q=q, status=status)
+    totals = {
+        "contract": sum(x["contract_amount"] for x in contracts),
+        "invoiced": sum(x["invoiced"] for x in contracts),
+        "paid": sum(x["paid"] for x in contracts),
+        "outstanding": sum(x["outstanding"] for x in contracts),
+        "overdue": sum(x["overdue"] for x in contracts),
+        "unbilled": sum(x["unbilled"] for x in contracts),
+    }
+    return templates.TemplateResponse(
+        request=request,
+        name="finance_receivables.html",
+        context=page_ctx(
+            request,
+            db,
+            contracts=contracts,
+            milestones=milestones,
+            totals=totals,
+            aging=aging_summary(db),
+            q=q,
+            status=status,
+            today=date.today(),
+            can_edit=require_perm(db, request, "fin.receivable.edit"),
+        ),
+    )
+
+
+@app.get("/fin/milestones/{milestone_id}", response_class=HTMLResponse)
+def fin_milestone_detail(request: Request, milestone_id: int, db: Session = Depends(get_db)):
+    if not require_perm(db, request, "fin.receivable.view"):
+        return render_error(request, db, "没有访问应收与回款的权限", 403)
+    milestone = (
+        db.query(ContractMilestone)
+        .filter(ContractMilestone.id == milestone_id, ContractMilestone.deleted == 0)
+        .first()
+    )
+    if not milestone:
+        return render_error(request, db, "里程碑不存在或已删除", 404)
+    contract = db.query(Contract).filter(Contract.id == milestone.contract_id, Contract.deleted == 0).first()
+    amount = float(milestone.milestone_amount or 0)
+    invoiced = float(milestone.invoiced_amount or 0)
+    paid = float(milestone.paid_amount or milestone.actual_payment_amount or 0)
+    return templates.TemplateResponse(
+        request=request,
+        name="finance_milestone.html",
+        context=page_ctx(
+            request,
+            db,
+            milestone=milestone,
+            contract=contract,
+            amount=amount,
+            invoiced=invoiced,
+            paid=paid,
+            outstanding=max(invoiced - paid, 0),
+            unbilled=max(amount - invoiced, 0),
+            can_edit=require_perm(db, request, "fin.receivable.edit"),
+            message=request.query_params.get("message", ""),
+        ),
+    )
+
+
+@app.post("/fin/milestones/{milestone_id}/invoice")
+async def fin_milestone_invoice(
+    request: Request, milestone_id: int, db: Session = Depends(get_db)
+):
+    if not require_perm(db, request, "fin.receivable.edit"):
+        return render_error(request, db, "没有登记开票的权限", 403)
+    milestone = (
+        db.query(ContractMilestone)
+        .filter(ContractMilestone.id == milestone_id, ContractMilestone.deleted == 0)
+        .first()
+    )
+    if not milestone:
+        return render_error(request, db, "里程碑不存在或已删除", 404)
+    form = await request.form()
+    try:
+        amount = float(form.get("amount") or 0)
+    except ValueError:
+        amount = 0
+    if amount <= 0:
+        return render_error(request, db, "开票金额必须大于 0", 400)
+    total = float(milestone.milestone_amount or 0)
+    current = float(milestone.invoiced_amount or 0)
+    if current + amount > total + 0.01:
+        return render_error(request, db, "开票金额不能超过里程碑未开票金额", 400)
+    try:
+        invoice_date = date.fromisoformat(str(form.get("invoice_date") or ""))
+    except ValueError:
+        invoice_date = date.today()
+    milestone.invoiced_amount = current + amount
+    milestone.actual_date = invoice_date
+    milestone.actual_invoice_year = invoice_date.year
+    milestone.actual_month = invoice_date.month
+    milestone.invoice_status = "INVOICED" if float(milestone.invoiced_amount) >= total else "PARTIAL"
+    sync_contract_finance_status(db, milestone.contract_id)
+    user = get_current_user(request, db)
+    audit(
+        db,
+        user,
+        "INVOICE",
+        "contract_milestone",
+        milestone.id,
+        f"登记开票 {amount:,.2f}，里程碑 {milestone.milestone_name}",
+        request.client.host if request.client else "",
+    )
+    db.commit()
+    return RedirectResponse(f"/fin/milestones/{milestone.id}?message=开票已登记", status_code=302)
+
+
+@app.post("/fin/milestones/{milestone_id}/receipt")
+async def fin_milestone_receipt(
+    request: Request, milestone_id: int, db: Session = Depends(get_db)
+):
+    if not require_perm(db, request, "fin.receivable.edit"):
+        return render_error(request, db, "没有登记回款的权限", 403)
+    milestone = (
+        db.query(ContractMilestone)
+        .filter(ContractMilestone.id == milestone_id, ContractMilestone.deleted == 0)
+        .first()
+    )
+    if not milestone:
+        return render_error(request, db, "里程碑不存在或已删除", 404)
+    form = await request.form()
+    try:
+        amount = float(form.get("amount") or 0)
+    except ValueError:
+        amount = 0
+    if amount <= 0:
+        return render_error(request, db, "回款金额必须大于 0", 400)
+    total = float(milestone.milestone_amount or 0)
+    current = float(milestone.paid_amount or milestone.actual_payment_amount or 0)
+    if current + amount > total + 0.01:
+        return render_error(request, db, "回款金额不能超过里程碑未回款金额", 400)
+    try:
+        receipt_date = date.fromisoformat(str(form.get("receipt_date") or ""))
+    except ValueError:
+        receipt_date = date.today()
+    milestone.paid_amount = current + amount
+    milestone.actual_payment_amount = current + amount
+    milestone.actual_payment_date = receipt_date
+    milestone.payment_status = "PAID" if float(milestone.paid_amount) >= total else "PARTIAL"
+    sync_contract_finance_status(db, milestone.contract_id)
+    user = get_current_user(request, db)
+    audit(
+        db,
+        user,
+        "RECEIPT",
+        "contract_milestone",
+        milestone.id,
+        f"登记回款 {amount:,.2f}，里程碑 {milestone.milestone_name}",
+        request.client.host if request.client else "",
+    )
+    db.commit()
+    return RedirectResponse(f"/fin/milestones/{milestone.id}?message=回款已登记", status_code=302)
+
+
+@app.get("/fin/customers", response_class=HTMLResponse)
+def fin_customers(request: Request, db: Session = Depends(get_db), q: str = ""):
+    if not require_perm(db, request, "fin.customer.view"):
+        return render_error(request, db, "没有访问客户盈利的权限", 403)
+    rows = customer_rows(db, q=q)
+    totals = {
+        "revenue": sum(x["invoiced"] for x in rows),
+        "cost": sum(x["total_cost"] for x in rows),
+        "gross_profit": sum(x["gross_profit"] for x in rows),
+        "outstanding": sum(x["outstanding"] for x in rows),
+        "overdue": sum(x["overdue"] for x in rows),
+    }
+    return templates.TemplateResponse(
+        request=request,
+        name="finance_customers.html",
+        context=page_ctx(request, db, rows=rows, totals=totals, q=q),
+    )
+
+
+@app.get("/fin/cashflow", response_class=HTMLResponse)
+def fin_cashflow(request: Request, db: Session = Depends(get_db)):
+    if not require_perm(db, request, "fin.cashflow.view"):
+        return render_error(request, db, "没有访问现金流预测的权限", 403)
+    data = cashflow_forecast(db)
+    return templates.TemplateResponse(
+        request=request,
+        name="finance_cashflow.html",
+        context=page_ctx(request, db, data=data, today=date.today()),
+    )
+
+
+@app.get("/fin/budget", response_class=HTMLResponse)
+def fin_budget(request: Request, db: Session = Depends(get_db), year: int = 0):
+    if not require_perm(db, request, "fin.budget.view"):
+        return render_error(request, db, "没有访问预算达成的权限", 403)
+    rows, year = budget_rows(db, year or date.today().year)
+    totals = {x["value"]: {"budget": 0.0, "actual": 0.0} for x in BUDGET_CATEGORIES}
+    for row in rows:
+        category = row["budget"].category
+        if category not in totals:
+            continue
+        totals[category]["budget"] += row["budget_amount"]
+        totals[category]["actual"] += row["actual"]
+    years = [
+        x[0]
+        for x in db.query(FinanceBudget.budget_year)
+        .filter(FinanceBudget.deleted == 0)
+        .distinct()
+        .order_by(FinanceBudget.budget_year.desc())
+        .all()
+    ]
+    if year not in years:
+        years.insert(0, year)
+    return templates.TemplateResponse(
+        request=request,
+        name="finance_budget.html",
+        context=page_ctx(
+            request,
+            db,
+            rows=rows,
+            totals=totals,
+            year=year,
+            years=years,
+            categories=BUDGET_CATEGORIES,
+            category_labels=BUDGET_CATEGORY_LABELS,
+            type_labels=BUDGET_TYPE_LABELS,
+            projects=db.query(Project).filter(Project.deleted == 0).order_by(Project.id.asc()).all(),
+            orgs=db.query(Org).filter(Org.deleted == 0).order_by(Org.id.asc()).all(),
+            can_edit=require_perm(db, request, "fin.budget.edit"),
+            message=request.query_params.get("message", ""),
+        ),
+    )
+
+
+@app.post("/fin/budget")
+async def fin_budget_create(request: Request, db: Session = Depends(get_db)):
+    if not require_perm(db, request, "fin.budget.edit"):
+        return render_error(request, db, "没有维护预算的权限", 403)
+    form = await request.form()
+    try:
+        year = int(form.get("budget_year") or date.today().year)
+    except ValueError:
+        year = date.today().year
+    budget_type = str(form.get("budget_type") or "COMPANY")
+    category = str(form.get("category") or "")
+    if category not in BUDGET_CATEGORY_LABELS:
+        return render_error(request, db, "请选择有效的预算科目", 400)
+    try:
+        amount = float(form.get("budget_amount") or 0)
+    except ValueError:
+        amount = 0
+    if amount <= 0:
+        return render_error(request, db, "预算金额必须大于 0", 400)
+    project = None
+    org = None
+    if budget_type == "PROJECT":
+        try:
+            project_id = int(form.get("project_id") or 0)
+        except ValueError:
+            project_id = 0
+        project = db.query(Project).filter(Project.id == project_id, Project.deleted == 0).first()
+        if not project:
+            return render_error(request, db, "项目预算必须选择项目", 400)
+    elif budget_type == "ORG":
+        try:
+            org_id = int(form.get("org_id") or 0)
+        except ValueError:
+            org_id = 0
+        org = db.query(Org).filter(Org.id == org_id, Org.deleted == 0).first()
+        if not org:
+            return render_error(request, db, "组织预算必须选择组织", 400)
+    elif budget_type != "COMPANY":
+        budget_type = "COMPANY"
+    budget = FinanceBudget(
+        company_id=1,
+        budget_year=year,
+        budget_type=budget_type,
+        project_id=project.id if project else None,
+        project_code=project.project_code if project else None,
+        project_name=project.project_name if project else None,
+        org_id=org.id if org else None,
+        org_name=org.org_name if org else None,
+        customer_id=project.customer_id if project else None,
+        customer_name=project.customer_name if project else None,
+        category=category,
+        budget_amount=amount,
+        version="V1.0",
+        status="APPROVED",
+        remark=str(form.get("remark") or ""),
+    )
+    db.add(budget)
+    db.flush()
+    user = get_current_user(request, db)
+    audit(
+        db,
+        user,
+        "CREATE",
+        "finance_budget",
+        budget.id,
+        f"新增 {year} 年预算 {BUDGET_CATEGORY_LABELS.get(category)} {amount:,.2f}",
+        request.client.host if request.client else "",
+    )
+    db.commit()
+    return RedirectResponse(f"/fin/budget?year={year}&message=预算已保存", status_code=302)
+
+
+@app.post("/fin/budget/{budget_id}/delete")
+def fin_budget_delete(request: Request, budget_id: int, db: Session = Depends(get_db)):
+    if not require_perm(db, request, "fin.budget.edit"):
+        return render_error(request, db, "没有维护预算的权限", 403)
+    budget = db.query(FinanceBudget).filter(FinanceBudget.id == budget_id, FinanceBudget.deleted == 0).first()
+    if not budget:
+        return render_error(request, db, "预算记录不存在或已删除", 404)
+    user = get_current_user(request, db)
+    budget.deleted = 1
+    budget.updated_by = user.username if user else "system"
+    audit(
+        db,
+        user,
+        "DELETE",
+        "finance_budget",
+        budget.id,
+        "删除预算记录",
+        request.client.host if request.client else "",
+    )
+    db.commit()
+    return RedirectResponse(f"/fin/budget?year={budget.budget_year}&message=预算已删除", status_code=302)
+
+
+@app.get("/fin/costs", response_class=HTMLResponse)
+def fin_costs(
+    request: Request,
+    db: Session = Depends(get_db),
+    q: str = "",
+    project_id: int = 0,
+    cost_type: str = "",
+):
+    if not require_perm(db, request, "fin.cost.view"):
+        return render_error(request, db, "没有访问成本录入的权限", 403)
+    query = db.query(FinanceCost).filter(FinanceCost.deleted == 0)
+    if project_id:
+        query = query.filter(FinanceCost.project_id == project_id)
+    if cost_type:
+        query = query.filter(FinanceCost.cost_type == cost_type)
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            (FinanceCost.project_name.ilike(like))
+            | (FinanceCost.project_code.ilike(like))
+            | (FinanceCost.supplier_name.ilike(like))
+            | (FinanceCost.employee_name.ilike(like))
+            | (FinanceCost.remark.ilike(like))
+        )
+    costs = query.order_by(FinanceCost.cost_date.desc(), FinanceCost.id.desc()).all()
+    projects = db.query(Project).filter(Project.deleted == 0).order_by(Project.id.asc()).all()
+    employees = db.query(Employee).filter(Employee.deleted == 0).order_by(Employee.id.asc()).all()
+    totals = {
+        "all": sum(float(x.amount or 0) for x in costs),
+        "labor": sum(float(x.amount or 0) for x in costs if x.cost_type == "LABOR"),
+        "expense": sum(float(x.amount or 0) for x in costs if x.cost_type == "EXPENSE"),
+        "subcontract": sum(float(x.amount or 0) for x in costs if x.cost_type == "SUBCONTRACT"),
+    }
+    return templates.TemplateResponse(
+        request=request,
+        name="finance_costs.html",
+        context=page_ctx(
+            request,
+            db,
+            costs=costs,
+            projects=projects,
+            employees=employees,
+            totals=totals,
+            q=q,
+            project_id=project_id,
+            cost_type=cost_type,
+            cost_types=COST_TYPES,
+            cost_type_labels=COST_TYPE_LABELS,
+            can_edit=require_perm(db, request, "fin.cost.edit"),
+            message=request.query_params.get("message", ""),
+        ),
+    )
+
+
+@app.post("/fin/costs")
+async def fin_cost_create(request: Request, db: Session = Depends(get_db)):
+    if not require_perm(db, request, "fin.cost.edit"):
+        return render_error(request, db, "没有录入成本的权限", 403)
+    form = await request.form()
+    try:
+        project_id = int(form.get("project_id") or 0)
+    except ValueError:
+        project_id = 0
+    project = db.query(Project).filter(Project.id == project_id, Project.deleted == 0).first()
+    if not project:
+        return render_error(request, db, "请选择有效的项目", 400)
+    try:
+        amount = float(form.get("amount") or 0)
+    except ValueError:
+        amount = 0
+    if amount <= 0:
+        return render_error(request, db, "成本金额必须大于 0", 400)
+    try:
+        cost_date = date.fromisoformat(str(form.get("cost_date") or ""))
+    except ValueError:
+        cost_date = date.today()
+    cost_type = str(form.get("cost_type") or "LABOR")
+    if cost_type not in COST_TYPE_LABELS:
+        cost_type = "LABOR"
+    employee_id = int(form.get("employee_id") or 0) if str(form.get("employee_id") or "").isdigit() else 0
+    employee = db.query(Employee).filter(Employee.id == employee_id, Employee.deleted == 0).first() if employee_id else None
+    link = (
+        db.query(ContractProject)
+        .filter(ContractProject.project_id == project.id, ContractProject.deleted == 0)
+        .first()
+    )
+    contract = db.query(Contract).filter(Contract.id == link.contract_id, Contract.deleted == 0).first() if link else None
+    cost = FinanceCost(
+        company_id=project.company_id or 1,
+        project_id=project.id,
+        project_code=project.project_code,
+        project_name=project.project_name,
+        contract_id=contract.id if contract else None,
+        contract_no=contract.contract_no if contract else None,
+        customer_id=project.customer_id,
+        customer_name=project.customer_name,
+        org_id=project.org_id,
+        org_name=project.org_name,
+        cost_type=cost_type,
+        cost_category=str(form.get("cost_category") or COST_TYPE_LABELS[cost_type]),
+        cost_date=cost_date,
+        period=cost_date.strftime("%Y-%m"),
+        amount=amount,
+        supplier_name=str(form.get("supplier_name") or ""),
+        employee_id=employee.id if employee else None,
+        employee_name=employee.employee_name if employee else "",
+        source="MANUAL",
+        status="CONFIRMED",
+        remark=str(form.get("remark") or ""),
+    )
+    db.add(cost)
+    db.flush()
+    sync_project_cost(db, project.id)
+    user = get_current_user(request, db)
+    audit(
+        db,
+        user,
+        "CREATE",
+        "finance_cost",
+        cost.id,
+        f"录入 {project.project_code} 成本 {amount:,.2f}",
+        request.client.host if request.client else "",
+    )
+    db.commit()
+    return RedirectResponse(f"/fin/costs?message=成本已录入", status_code=302)
+
+
+@app.post("/fin/costs/{cost_id}/delete")
+def fin_cost_delete(request: Request, cost_id: int, db: Session = Depends(get_db)):
+    if not require_perm(db, request, "fin.cost.edit"):
+        return render_error(request, db, "没有删除成本的权限", 403)
+    cost = db.query(FinanceCost).filter(FinanceCost.id == cost_id, FinanceCost.deleted == 0).first()
+    if not cost:
+        return render_error(request, db, "成本记录不存在或已删除", 404)
+    project_id = cost.project_id
+    user = get_current_user(request, db)
+    cost.deleted = 1
+    cost.updated_by = user.username if user else "system"
+    sync_project_cost(db, project_id)
+    audit(
+        db,
+        user,
+        "DELETE",
+        "finance_cost",
+        cost.id,
+        f"删除项目成本 {cost.amount:,.2f}",
+        request.client.host if request.client else "",
+    )
+    db.commit()
+    return RedirectResponse("/fin/costs?message=成本已删除", status_code=302)
+
+
 @app.get("/md/{entity_key}", response_class=HTMLResponse)
 def entity_list(
     request: Request,
@@ -850,6 +1453,7 @@ def entity_detail(request: Request, entity_key: str, record_id: int, db: Session
                 contracts=contracts,
                 followers=followers,
                 opportunities=opportunities,
+                fin=customer_stats(db, record),
                 message=request.query_params.get("message", ""),
             ),
         )
@@ -870,7 +1474,15 @@ def entity_detail(request: Request, entity_key: str, record_id: int, db: Session
         return templates.TemplateResponse(
             request=request,
             name="project_detail.html",
-            context=page_ctx(request, db, ent=ent, record=record, members=members, links=links),
+            context=page_ctx(
+                request,
+                db,
+                ent=ent,
+                record=record,
+                members=members,
+                links=links,
+                fin=project_stats(db, record),
+            ),
         )
 
     if entity_key == "contract":
@@ -907,6 +1519,7 @@ def entity_detail(request: Request, entity_key: str, record_id: int, db: Session
                 milestones=milestones,
                 links=links,
                 opportunities=opportunities,
+                fin=contract_stats(db, record, milestones),
                 message=request.query_params.get("message", ""),
             ),
         )
@@ -968,6 +1581,8 @@ def api_stats(db: Session = Depends(get_db)):
         "customer_follower": db.query(CustomerFollower).filter(CustomerFollower.deleted == 0).count(),
         "project": db.query(Project).filter(Project.deleted == 0).count(),
         "contract": db.query(Contract).filter(Contract.deleted == 0).count(),
+        "finance_cost": db.query(FinanceCost).filter(FinanceCost.deleted == 0).count(),
+        "finance_budget": db.query(FinanceBudget).filter(FinanceBudget.deleted == 0).count(),
         "product": db.query(Product).filter(Product.deleted == 0).count(),
         "tax_rate": db.query(TaxRate).filter(TaxRate.deleted == 0).count(),
         "dict": db.query(Dict).filter(Dict.deleted == 0).count(),

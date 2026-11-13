@@ -2,6 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from .auth import hash_password
+from .finance import sync_project_cost
 from .models import (
     AuditLog,
     Company,
@@ -16,6 +17,8 @@ from .models import (
     Dict,
     DictItem,
     Employee,
+    FinanceBudget,
+    FinanceCost,
     Opportunity,
     OpportunityFollow,
     Org,
@@ -544,6 +547,168 @@ def seed():
         db.add_all(items)
 
         db.add(AuditLog(user_id=users[0].id, username="admin", action="INIT", entity="system", entity_id=0, detail="初始化平台底座与主数据种子", ip="127.0.0.1", create_time=datetime.now()))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def ensure_finance_permissions():
+    """给已有角色补充财务中心权限，兼容已初始化过的数据库。"""
+    db = SessionLocal()
+    try:
+        for role_code, extra in (("EDITOR", "fin.*"), ("VIEWER", "fin.*.view")):
+            role = db.query(Role).filter(Role.role_code == role_code, Role.deleted == 0).first()
+            if not role:
+                continue
+            raw = (role.permissions or "").replace(" ", "")
+            if extra not in raw:
+                role.permissions = f"{raw},{extra}".strip(",")
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def seed_finance():
+    """补充财务演示数据：项目成本、预算。已存在则跳过。"""
+    db = SessionLocal()
+    try:
+        if db.query(FinanceCost).count() > 0 or db.query(FinanceBudget).count() > 0:
+            return
+        projects = {
+            p.project_code: p
+            for p in db.query(Project).filter(Project.deleted == 0).all()
+        }
+        contracts = {
+            c.contract_no: c
+            for c in db.query(Contract).filter(Contract.deleted == 0).all()
+        }
+        prj1 = projects.get("PRJ001")
+        prj2 = projects.get("PRJ002")
+        con1 = contracts.get("HT2026001")
+        con2 = contracts.get("HT2026002")
+        if not prj1 or not prj2 or not con1 or not con2:
+            return
+
+        def cost(project, contract, cost_type, category, when, amount, supplier="", employee=""):
+            return FinanceCost(
+                company_id=project.company_id or 1,
+                project_id=project.id,
+                project_code=project.project_code,
+                project_name=project.project_name,
+                contract_id=contract.id if contract else None,
+                contract_no=contract.contract_no if contract else None,
+                customer_id=project.customer_id,
+                customer_name=project.customer_name,
+                org_id=project.org_id,
+                org_name=project.org_name,
+                cost_type=cost_type,
+                cost_category=category,
+                cost_date=when,
+                period=when.strftime("%Y-%m"),
+                amount=Decimal(str(amount)),
+                supplier_name=supplier,
+                employee_name=employee,
+                source="MANUAL",
+                status="CONFIRMED",
+                remark="财务初始化演示数据",
+            )
+
+        costs = [
+            cost(prj1, con1, "LABOR", "项目人工", date(2026, 2, 28), 60000, employee="张伟"),
+            cost(prj1, con1, "LABOR", "项目人工", date(2026, 3, 31), 60000, employee="李娜"),
+            cost(prj1, con1, "LABOR", "项目人工", date(2026, 4, 30), 60000, employee="李娜"),
+            cost(prj1, con1, "LABOR", "项目人工", date(2026, 5, 31), 60000, employee="王强"),
+            cost(prj1, con1, "LABOR", "项目人工", date(2026, 6, 30), 60000, employee="王强"),
+            cost(prj1, con1, "EXPENSE", "差旅办公", date(2026, 2, 15), 10000, supplier="携程商旅"),
+            cost(prj1, con1, "EXPENSE", "差旅办公", date(2026, 3, 15), 10000, supplier="携程商旅"),
+            cost(prj1, con1, "EXPENSE", "项目会议", date(2026, 4, 15), 15000, supplier="深圳会务"),
+            cost(prj1, con1, "EXPENSE", "差旅办公", date(2026, 5, 15), 15000, supplier="携程商旅"),
+            cost(prj1, con1, "EXPENSE", "资料采购", date(2026, 6, 15), 10000, supplier="京东企业购"),
+            cost(prj2, con2, "LABOR", "项目人工", date(2026, 4, 30), 60000, employee="张伟"),
+            cost(prj2, con2, "LABOR", "项目人工", date(2026, 5, 31), 60000, employee="李娜"),
+            cost(prj2, con2, "EXPENSE", "差旅办公", date(2026, 4, 15), 30000, supplier="携程商旅"),
+        ]
+        db.add_all(costs)
+        db.flush()
+
+        company_budgets = [
+            ("SIGNING", 3000000),
+            ("REVENUE", 2400000),
+            ("LABOR_COST", 1500000),
+            ("EXPENSE", 500000),
+            ("CASH_IN", 2200000),
+        ]
+        org_budgets = [
+            ("SIGNING", 2400000),
+            ("REVENUE", 2400000),
+            ("LABOR_COST", 1500000),
+            ("EXPENSE", 500000),
+            ("CASH_IN", 2200000),
+        ]
+        budgets = []
+        for category, amount in company_budgets:
+            budgets.append(
+                FinanceBudget(
+                    company_id=1,
+                    budget_year=2026,
+                    budget_type="COMPANY",
+                    category=category,
+                    budget_amount=Decimal(str(amount)),
+                    version="V1.0",
+                    status="APPROVED",
+                    remark="2026 年度公司预算",
+                )
+            )
+        for category, amount in org_budgets:
+            budgets.append(
+                FinanceBudget(
+                    company_id=1,
+                    budget_year=2026,
+                    budget_type="ORG",
+                    org_id=prj1.org_id,
+                    org_name=prj1.org_name,
+                    category=category,
+                    budget_amount=Decimal(str(amount)),
+                    version="V1.0",
+                    status="APPROVED",
+                    remark="2026 年度交付中心预算",
+                )
+            )
+        for project, contract, rows in (
+            (prj1, con1, [("REVENUE", 1500000), ("LABOR_COST", 900000), ("EXPENSE", 300000)]),
+            (prj2, con2, [("REVENUE", 900000), ("LABOR_COST", 600000), ("EXPENSE", 200000)]),
+        ):
+            for category, amount in rows:
+                budgets.append(
+                    FinanceBudget(
+                        company_id=project.company_id or 1,
+                        budget_year=2026,
+                        budget_type="PROJECT",
+                        project_id=project.id,
+                        project_code=project.project_code,
+                        project_name=project.project_name,
+                        customer_id=project.customer_id,
+                        customer_name=project.customer_name,
+                        contract_id=contract.id,
+                        contract_no=contract.contract_no,
+                        category=category,
+                        budget_amount=Decimal(str(amount)),
+                        version="V1.0",
+                        status="APPROVED",
+                        remark="项目预算",
+                    )
+                )
+        db.add_all(budgets)
+        db.flush()
+        db.commit()
+        for project in (prj1, prj2):
+            sync_project_cost(db, project.id)
         db.commit()
     except Exception:
         db.rollback()

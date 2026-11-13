@@ -29,22 +29,39 @@
   </div>
 </div>
 
+<div class="kpi-grid" style="margin-top:18px">
+  <div class="card kpi"><div class="kpi-label">合同金额</div><div class="kpi-value" style="font-size:24px">{{ "{:,.0f}".format(fin.contract_amount) }}</div><div class="kpi-foot">含税合同额</div></div>
+  <div class="card kpi"><div class="kpi-label">已开票</div><div class="kpi-value" style="font-size:24px">{{ "{:,.0f}".format(fin.invoiced) }}</div><div class="kpi-foot">开票率 {{ "{:.1f}%".format(fin.invoice_rate * 100) }}</div></div>
+  <div class="card kpi"><div class="kpi-label">已回款</div><div class="kpi-value" style="font-size:24px;color:var(--green)">{{ "{:,.0f}".format(fin.paid) }}</div><div class="kpi-foot">回款率 {{ "{:.1f}%".format(fin.collection_rate * 100) }}</div></div>
+  <div class="card kpi"><div class="kpi-label">应收余额</div><div class="kpi-value" style="font-size:24px">{{ "{:,.0f}".format(fin.outstanding) }}</div><div class="kpi-foot">已开票未回款</div></div>
+  <div class="card kpi"><div class="kpi-label">逾期应收</div><div class="kpi-value" style="font-size:24px;color:var(--red)">{{ "{:,.0f}".format(fin.overdue) }}</div><div class="kpi-foot">{{ fin.overdue_count }} 笔逾期</div></div>
+  <div class="card kpi"><div class="kpi-label">未开票</div><div class="kpi-value" style="font-size:24px;color:var(--amber)">{{ "{:,.0f}".format(fin.unbilled) }}</div><div class="kpi-foot">合同额 - 已开票</div></div>
+</div>
+
 <div class="card card-pad" style="margin-top:18px">
   <div class="section-head">
     <div><h2 class="card-title">合同里程碑 / 收付款计划</h2><p class="card-sub">后续开票、回款、预算达成都以里程碑为锚点。</p></div>
-    <a class="btn btn-primary btn-sm" href="/md/contract_milestone/new?contract_id={{ record.id }}">+ 新增里程碑</a>
+    <div class="actions">
+      <a class="btn btn-ghost btn-sm" href="/fin/receivables?q={{ record.contract_no }}">财务应收</a>
+      <a class="btn btn-primary btn-sm" href="/md/contract_milestone/new?contract_id={{ record.id }}">+ 新增里程碑</a>
+    </div>
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>编码</th><th>里程碑</th><th>类型</th><th>收款比例</th><th>金额</th><th>计划开票</th><th>开票状态</th><th>预计回款</th><th>收款状态</th><th class="right">操作</th></tr></thead>
+      <thead><tr><th>编码</th><th>里程碑</th><th>类型</th><th>收款比例</th><th>金额</th><th>已开票</th><th>已回款</th><th>应收</th><th>计划开票</th><th>开票状态</th><th>预计回款</th><th>收款状态</th><th class="right">操作</th></tr></thead>
       <tbody>
       {% for m in milestones %}
+        {% set invoiced = m.invoiced_amount or 0 %}
+        {% set paid = m.paid_amount or m.actual_payment_amount or 0 %}
         <tr>
           <td>{{ m.milestone_code or '' }}</td>
           <td><b>{{ m.milestone_name }}</b></td>
           <td>{{ m.milestone_type }}</td>
           <td>{{ m.payment_ratio or 0 }}</td>
           <td>{{ "{:,.2f}".format(m.milestone_amount or 0) }}</td>
+          <td>{{ "{:,.2f}".format(invoiced) }}</td>
+          <td>{{ "{:,.2f}".format(paid) }}</td>
+          <td><b>{{ "{:,.2f}".format([invoiced - paid, 0]|max) }}</b></td>
           <td>{{ m.plan_date or '' }}</td>
           <td>
             {% if m.invoice_status == 'INVOICED' %}<span class="badge badge-green">已开票</span>
@@ -65,7 +82,7 @@
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="10"><div class="empty">暂无里程碑</div></td></tr>
+        <tr><td colspan="13"><div class="empty">暂无里程碑</div></td></tr>
       {% endfor %}
       </tbody>
     </table>

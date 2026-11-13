@@ -29,6 +29,16 @@
   </div>
 </div>
 
+<div class="kpi-grid" style="margin-top:18px">
+  <div class="card kpi"><div class="kpi-label">确认收入</div><div class="kpi-value" style="font-size:24px">{{ "{:,.0f}".format(fin.revenue) }}</div><div class="kpi-foot">已开票收入</div></div>
+  <div class="card kpi"><div class="kpi-label">项目成本</div><div class="kpi-value" style="font-size:24px">{{ "{:,.0f}".format(fin.total_cost) }}</div><div class="kpi-foot">人工 {{ "{:,.0f}".format(fin.labor_cost) }} / 费用 {{ "{:,.0f}".format(fin.expense_cost) }}</div></div>
+  <div class="card kpi"><div class="kpi-label">项目毛利</div><div class="kpi-value" style="font-size:24px;color:{{ 'var(--red)' if fin.gross_profit < 0 else 'var(--green)' }}">{{ "{:,.0f}".format(fin.gross_profit) }}</div><div class="kpi-foot">毛利率 {{ "{:.1f}%".format(fin.gross_margin * 100) if fin.gross_margin is not none else '-' }}</div></div>
+  <div class="card kpi"><div class="kpi-label">预算使用率</div><div class="kpi-value" style="font-size:24px">{{ "{:.1f}%".format(fin.budget_usage * 100) if fin.budget_usage is not none else '-' }}</div><div class="kpi-foot">成本预算 {{ "{:,.0f}".format(fin.budget_cost) }}</div></div>
+  <div class="card kpi"><div class="kpi-label">应收余额</div><div class="kpi-value" style="font-size:24px">{{ "{:,.0f}".format(fin.outstanding) }}</div><div class="kpi-foot">已开票未回款</div></div>
+  <div class="card kpi"><div class="kpi-label">逾期应收</div><div class="kpi-value" style="font-size:24px;color:var(--red)">{{ "{:,.0f}".format(fin.overdue) }}</div><div class="kpi-foot">已过到期日</div></div>
+</div>
+<div style="margin-top:14px"><a class="btn btn-primary btn-sm" href="/fin/projects/{{ record.id }}">查看完整项目损益</a></div>
+
 <div class="card card-pad" style="margin-top:18px">
   <div class="section-head">
     <div><h2 class="card-title">项目成员</h2><p class="card-sub">项目成员、角色、投入比例；后续工时和结算从这里取数。</p></div>

@@ -13,7 +13,7 @@
     <div class="brand">
       <a href="/mdm" style="color:inherit;text-decoration:none">
         <div class="brand-title">链宇 · 大一统平台</div>
-        <div class="brand-sub">平台底座 · 主数据管理</div>
+        <div class="brand-sub">主数据 · CRM · 财务经营</div>
       </a>
     </div>
     <nav class="nav">
@@ -27,6 +27,16 @@
         <a href="/md/opportunity" class="{{ 'active' if path.startswith('/md/opportunity') and not path.startswith('/md/opportunity_follow') else '' }}"><span class="ico">🎯</span>商机</a>
         <a href="/md/opportunity_follow" class="{{ 'active' if path.startswith('/md/opportunity_follow') else '' }}"><span class="ico">📝</span>跟进记录</a>
         <a href="/crm/payment" class="{{ 'active' if path.startswith('/crm/payment') else '' }}"><span class="ico">💰</span>回款视图</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-label">财务经营</div>
+        <a href="/fin" class="{{ 'active' if path == '/fin' else '' }}"><span class="ico">💹</span>财务看板</a>
+        <a href="/fin/projects" class="{{ 'active' if path.startswith('/fin/projects') else '' }}"><span class="ico">📊</span>项目损益</a>
+        <a href="/fin/receivables" class="{{ 'active' if path.startswith('/fin/receivables') else '' }}"><span class="ico">🧾</span>应收与回款</a>
+        <a href="/fin/customers" class="{{ 'active' if path.startswith('/fin/customers') else '' }}"><span class="ico">🤝</span>客户盈利</a>
+        <a href="/fin/cashflow" class="{{ 'active' if path.startswith('/fin/cashflow') else '' }}"><span class="ico">💵</span>现金流预测</a>
+        <a href="/fin/budget" class="{{ 'active' if path.startswith('/fin/budget') else '' }}"><span class="ico">🎯</span>预算达成</a>
+        <a href="/fin/costs" class="{{ 'active' if path.startswith('/fin/costs') else '' }}"><span class="ico">🧮</span>成本录入</a>
       </div>
       <div class="nav-group">
         <div class="nav-label">组织与人员</div>

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}现金流预测 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">现金流预测</h1>
+    <div class="page-desc">实际回款、实际成本与未来合同计划回款、剩余预算支出对比，提前识别资金缺口。</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/fin">财务看板</a>
+    <a class="btn btn-ghost" href="/fin/receivables">应收与回款</a>
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="card kpi"><div class="kpi-ico">💰</div><div class="kpi-label">近 6 个月实际流入</div><div class="kpi-value" style="color:var(--green)">{{ "{:,.0f}".format(data.actual_in) }}</div><div class="kpi-foot">实际回款</div></div>
+  <div class="card kpi"><div class="kpi-ico">🧮</div><div class="kpi-label">近 6 个月实际流出</div><div class="kpi-value">{{ "{:,.0f}".format(data.actual_out) }}</div><div class="kpi-foot">实际成本支出</div></div>
+  <div class="card kpi"><div class="kpi-ico">📊</div><div class="kpi-label">近 6 个月净现金流</div><div class="kpi-value" style="color:{{ 'var(--red)' if data.actual_in - data.actual_out < 0 else 'var(--green)' }}">{{ "{:,.0f}".format(data.actual_in - data.actual_out) }}</div><div class="kpi-foot">流入 - 流出</div></div>
+  <div class="card kpi"><div class="kpi-ico">📥</div><div class="kpi-label">未来 6 个月预计流入</div><div class="kpi-value">{{ "{:,.0f}".format(data.forecast_in) }}</div><div class="kpi-foot">合同计划回款</div></div>
+  <div class="card kpi"><div class="kpi-ico">📤</div><div class="kpi-label">未来 6 个月预计流出</div><div class="kpi-value">{{ "{:,.0f}".format(data.forecast_out) }}</div><div class="kpi-foot">剩余预算成本</div></div>
+  <div class="card kpi"><div class="kpi-ico">⚠️</div><div class="kpi-label">未来 6 个月净现金流</div><div class="kpi-value" style="color:{{ 'var(--red)' if data.forecast_in - data.forecast_out < 0 else 'var(--green)' }}">{{ "{:,.0f}".format(data.forecast_in - data.forecast_out) }}</div><div class="kpi-foot">预测资金缺口/盈余</div></div>
+</div>
+
+<div class="card card-pad">
+  <div class="section-head"><div><h2 class="card-title">月度现金流</h2><p class="card-sub">实际月份按回款和成本发生日期；预测月份按里程碑预计回款和剩余预算均匀分摊。</p></div></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>月份</th><th>类型</th><th>流入</th><th>流出</th><th>净现金流</th><th>累计净现金流</th></tr></thead>
+      <tbody>
+      {% for row in data.rows %}
+        <tr>
+          <td><b>{{ row.label }}</b></td>
+          <td>{% if row.kind == 'ACTUAL' %}<span class="badge badge-gray">实际</span>{% else %}<span class="badge badge-blue">预测</span>{% endif %}</td>
+          <td style="color:var(--green)">{{ "{:,.0f}".format(row.inflow) }}</td>
+          <td>{{ "{:,.0f}".format(row.outflow) }}</td>
+          <td style="color:{{ 'var(--red)' if row.net < 0 else 'var(--green)' }}"><b>{{ "{:,.0f}".format(row.net) }}</b></td>
+          <td style="color:{{ 'var(--red)' if row.cumulative < 0 else 'var(--ink)' }}">{{ "{:,.0f}".format(row.cumulative) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6"><div class="empty">暂无现金流数据</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="grid-2" style="margin-top:18px">
+  <div class="card card-pad">
+    <div class="section-head"><div><h2 class="card-title">预测口径说明</h2></div></div>
+    <div class="notice">
+      <div><b>预计流入</b>：未回款里程碑按预计回款日期归集，金额 = 里程碑金额 - 已回款。</div>
+      <div style="margin-top:8px"><b>预计流出</b>：项目剩余预算成本（人工 + 费用）按项目剩余周期均匀分摊；已结项项目不再计入。</div>
+      <div style="margin-top:8px"><b>累计净现金流</b>：从近 6 个月实际净现金流开始滚动累计，不代表银行账户余额。</div>
+    </div>
+  </div>
+  <div class="card card-pad">
+    <div class="section-head"><div><h2 class="card-title">经营提示</h2></div></div>
+    <div class="notice">
+      <div>1. 先看逾期应收，再看未来 3 个月预计回款，判断资金缺口。</div>
+      <div style="margin-top:8px">2. 低成本项目优先排产，高成本项目控制投入节奏。</div>
+      <div style="margin-top:8px">3. 对预计流出大于流入的月份，提前安排催收或调整采购/分包付款。</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

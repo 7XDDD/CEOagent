@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}项目损益 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">项目损益</h1>
+    <div class="page-desc">按项目归集合同收入、人工成本、费用、分包成本，计算毛利、毛利率和预算使用率。</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/fin">财务看板</a>
+    <a class="btn btn-primary" href="/fin/costs">录入成本</a>
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="card kpi"><div class="kpi-ico">📜</div><div class="kpi-label">项目合同额</div><div class="kpi-value">{{ "{:,.0f}".format(totals.contract) }}</div><div class="kpi-foot">{{ rows|length }} 个项目</div></div>
+  <div class="card kpi"><div class="kpi-ico">🧾</div><div class="kpi-label">确认收入</div><div class="kpi-value">{{ "{:,.0f}".format(totals.revenue) }}</div><div class="kpi-foot">已开票收入</div></div>
+  <div class="card kpi"><div class="kpi-ico">🧮</div><div class="kpi-label">项目成本</div><div class="kpi-value">{{ "{:,.0f}".format(totals.cost) }}</div><div class="kpi-foot">人工 + 费用 + 分包</div></div>
+  <div class="card kpi"><div class="kpi-ico">📈</div><div class="kpi-label">项目毛利</div><div class="kpi-value" style="color:{{ 'var(--red)' if totals.gross_profit < 0 else 'var(--green)' }}">{{ "{:,.0f}".format(totals.gross_profit) }}</div><div class="kpi-foot">收入 - 成本</div></div>
+  <div class="card kpi"><div class="kpi-ico">⚠️</div><div class="kpi-label">亏损项目</div><div class="kpi-value" style="color:var(--red)">{{ totals.loss }}</div><div class="kpi-foot">收入大于 0 且毛利为负</div></div>
+  <div class="card kpi"><div class="kpi-ico">🎯</div><div class="kpi-label">超预算项目</div><div class="kpi-value" style="color:var(--amber)">{{ totals.over_budget }}</div><div class="kpi-foot">成本预算使用率 &gt; 100%</div></div>
+</div>
+
+<div class="card card-pad">
+  <div class="toolbar">
+    <form class="search" method="get" action="/fin/projects">
+      <input class="input" name="q" value="{{ q }}" placeholder="搜索项目编码 / 名称 / 客户 / PM"/>
+      <select class="select" name="risk" style="width:150px">
+        <option value="">全部项目</option>
+        <option value="LOSS" {% if risk == 'LOSS' %}selected{% endif %}>亏损项目</option>
+        <option value="LOW_MARGIN" {% if risk == 'LOW_MARGIN' %}selected{% endif %}>低毛利项目</option>
+        <option value="OVER_BUDGET" {% if risk == 'OVER_BUDGET' %}selected{% endif %}>超预算项目</option>
+      </select>
+      <button class="btn btn-ghost" type="submit">筛选</button>
+      {% if q or risk %}<a class="btn btn-ghost" href="/fin/projects">清空</a>{% endif %}
+    </form>
+    <span class="muted">共 {{ rows|length }} 个项目</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>客户 / PM</th><th>合同额</th><th>确认收入</th><th>人工</th><th>费用</th><th>分包</th><th>总成本</th><th>毛利</th><th>毛利率</th><th>预算使用率</th><th class="right">操作</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        {% set p = row.project %}
+        <tr>
+          <td><a href="/fin/projects/{{ p.id }}">{{ p.project_code }}</a><div class="muted" style="font-size:11.5px">{{ p.project_name }}</div></td>
+          <td>{{ p.customer_name or '' }}<div class="muted" style="font-size:11.5px">{{ p.pm_name or '' }} · {{ p.status }}</div></td>
+          <td>{{ "{:,.0f}".format(row.contract_amount) }}</td>
+          <td>{{ "{:,.0f}".format(row.revenue) }}</td>
+          <td>{{ "{:,.0f}".format(row.labor_cost) }}</td>
+          <td>{{ "{:,.0f}".format(row.expense_cost) }}</td>
+          <td>{{ "{:,.0f}".format(row.subcontract_cost) }}</td>
+          <td><b>{{ "{:,.0f}".format(row.total_cost) }}</b></td>
+          <td style="color:{{ 'var(--red)' if row.gross_profit < 0 else 'var(--green)' }}"><b>{{ "{:,.0f}".format(row.gross_profit) }}</b></td>
+          <td>
+            {% if row.gross_margin is none %}<span class="badge badge-gray">未确认收入</span>
+            {% elif row.gross_margin < 0 %}<span class="badge badge-red">{{ "{:.1f}%".format(row.gross_margin * 100) }}</span>
+            {% elif row.gross_margin < 0.15 %}<span class="badge badge-amber">{{ "{:.1f}%".format(row.gross_margin * 100) }}</span>
+            {% else %}<span class="badge badge-green">{{ "{:.1f}%".format(row.gross_margin * 100) }}</span>{% endif %}
+          </td>
+          <td>
+            {% if row.budget_usage is none %}<span class="badge badge-gray">无预算</span>
+            {% elif row.budget_usage > 1 %}<span class="badge badge-red">{{ "{:.1f}%".format(row.budget_usage * 100) }}</span>
+            {% else %}<span class="badge badge-blue">{{ "{:.1f}%".format(row.budget_usage * 100) }}</span>{% endif %}
+          </td>
+          <td class="right"><a class="btn btn-ghost btn-sm" href="/fin/projects/{{ p.id }}">损益</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="12"><div class="empty">暂无项目损益数据</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}{{ milestone.milestone_name }} · 开票回款{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{{ milestone.milestone_name }}</h1>
+    <div class="page-desc">{{ contract.contract_no if contract else '' }} · {{ contract.customer_name if contract else '' }} · {{ milestone.milestone_code or '' }}</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/fin/receivables">返回应收与回款</a>
+    {% if contract %}<a class="btn btn-ghost" href="/detail/contract/{{ contract.id }}">合同详情</a>{% endif %}
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="card kpi"><div class="kpi-label">里程碑金额</div><div class="kpi-value" style="font-size:24px">{{ "{:,.0f}".format(amount) }}</div><div class="kpi-foot">收款比例 {{ milestone.payment_ratio or 0 }}</div></div>
+  <div class="card kpi"><div class="kpi-label">已开票</div><div class="kpi-value" style="font-size:24px">{{ "{:,.0f}".format(invoiced) }}</div><div class="kpi-foot">{{ milestone.invoice_status or '' }}</div></div>
+  <div class="card kpi"><div class="kpi-label">已回款</div><div class="kpi-value" style="font-size:24px;color:var(--green)">{{ "{:,.0f}".format(paid) }}</div><div class="kpi-foot">{{ milestone.payment_status or '' }}</div></div>
+  <div class="card kpi"><div class="kpi-label">应收余额</div><div class="kpi-value" style="font-size:24px">{{ "{:,.0f}".format(outstanding) }}</div><div class="kpi-foot">已开票未回款</div></div>
+  <div class="card kpi"><div class="kpi-label">未开票</div><div class="kpi-value" style="font-size:24px;color:var(--amber)">{{ "{:,.0f}".format(unbilled) }}</div><div class="kpi-foot">里程碑金额 - 已开票</div></div>
+  <div class="card kpi"><div class="kpi-label">应收到期日</div><div class="kpi-value" style="font-size:20px">{{ milestone.receivable_due_date or milestone.expected_payment_date or '-' }}</div><div class="kpi-foot">用于账龄与逾期判断</div></div>
+</div>
+
+<div class="card card-pad">
+  <div class="detail-grid">
+    <div class="detail-item"><div class="k">里程碑类型</div><div class="v">{{ milestone.milestone_type }}</div></div>
+    <div class="detail-item"><div class="k">计划开票日期</div><div class="v">{{ milestone.plan_date or '' }}</div></div>
+    <div class="detail-item"><div class="k">实际开票日期</div><div class="v">{{ milestone.actual_date or '' }}</div></div>
+    <div class="detail-item"><div class="k">预计回款日期</div><div class="v">{{ milestone.expected_payment_date or '' }}</div></div>
+    <div class="detail-item"><div class="k">实际回款日期</div><div class="v">{{ milestone.actual_payment_date or '' }}</div></div>
+    <div class="detail-item"><div class="k">合同金额</div><div class="v">{{ "{:,.2f}".format(contract.contract_amount or 0) if contract else '-' }} 元</div></div>
+  </div>
+</div>
+
+{% if can_edit %}
+<div class="grid-2" style="margin-top:18px">
+  <div class="card card-pad">
+    <div class="section-head"><div><h2 class="card-title">登记开票</h2><p class="card-sub">按本次开票金额累加，不能超过未开票金额。</p></div></div>
+    <form method="post" action="/fin/milestones/{{ milestone.id }}/invoice">
+      <div class="form-grid">
+        <div class="field">
+          <label>开票金额（元） <span class="req">*</span></label>
+          <input class="input" type="number" step="0.01" min="0.01" max="{{ unbilled if unbilled > 0 else 0.01 }}" name="amount" placeholder="例如 300000" required/>
+          <div class="help">当前未开票 {{ "{:,.2f}".format(unbilled) }} 元</div>
+        </div>
+        <div class="field">
+          <label>开票日期 <span class="req">*</span></label>
+          <input class="input" type="date" name="invoice_date" value="{{ now().strftime('%Y-%m-%d') }}" required/>
+        </div>
+      </div>
+      <div class="form-actions"><button class="btn btn-primary" type="submit">确认开票</button></div>
+    </form>
+  </div>
+
+  <div class="card card-pad">
+    <div class="section-head"><div><h2 class="card-title">登记回款</h2><p class="card-sub">按本次到账金额累加，不能超过里程碑未回款金额。</p></div></div>
+    <form method="post" action="/fin/milestones/{{ milestone.id }}/receipt">
+      <div class="form-grid">
+        <div class="field">
+          <label>回款金额（元） <span class="req">*</span></label>
+          <input class="input" type="number" step="0.01" min="0.01" max="{{ amount - paid if amount > paid else 0.01 }}" name="amount" placeholder="例如 200000" required/>
+          <div class="help">当前未回款 {{ "{:,.2f}".format(amount - paid if amount > paid else 0) }} 元</div>
+        </div>
+        <div class="field">
+          <label>回款日期 <span class="req">*</span></label>
+          <input class="input" type="date" name="receipt_date" value="{{ now().strftime('%Y-%m-%d') }}" required/>
+        </div>
+      </div>
+      <div class="form-actions"><button class="btn btn-primary" type="submit">确认回款</button></div>
+    </form>
+  </div>
+</div>
+{% else %}
+<div class="notice" style="margin-top:18px">当前账号为只读权限，不能登记开票或回款。</div>
+{% endif %}
+
+<div class="card card-pad" style="margin-top:18px">
+  <div class="section-head"><div><h2 class="card-title">登记说明</h2></div></div>
+  <div class="notice">
+    <div>1. 开票登记会增加已开票金额，并同步合同开票状态；应收余额 = 已开票 - 已回款。</div>
+    <div style="margin-top:8px">2. 回款登记会增加已回款金额，并同步合同收款状态；可先回款后开票，但应收余额不会为负。</div>
+    <div style="margin-top:8px">3. 当前版本按里程碑累计金额登记，不保留逐笔流水；如需逐笔流水，可后续扩展收款单/发票单。</div>
+  </div>
+</div>
+{% endblock %}

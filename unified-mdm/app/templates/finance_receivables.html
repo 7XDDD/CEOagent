@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}应收与回款 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">应收与回款</h1>
+    <div class="page-desc">以合同里程碑为锚，区分已开票应收、未开票金额、已回款与逾期；财务口径与 CRM 回款视图互补。</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/fin">财务看板</a>
+    <a class="btn btn-ghost" href="/crm/payment">CRM 回款视图</a>
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="card kpi"><div class="kpi-ico">📜</div><div class="kpi-label">合同总额</div><div class="kpi-value">{{ "{:,.0f}".format(totals.contract) }}</div><div class="kpi-foot">{{ contracts|length }} 份合同</div></div>
+  <div class="card kpi"><div class="kpi-ico">🧾</div><div class="kpi-label">已开票</div><div class="kpi-value">{{ "{:,.0f}".format(totals.invoiced) }}</div><div class="kpi-foot">确认应收基础</div></div>
+  <div class="card kpi"><div class="kpi-ico">💰</div><div class="kpi-label">已回款</div><div class="kpi-value" style="color:var(--green)">{{ "{:,.0f}".format(totals.paid) }}</div><div class="kpi-foot">实际到账</div></div>
+  <div class="card kpi"><div class="kpi-ico">📥</div><div class="kpi-label">应收余额</div><div class="kpi-value">{{ "{:,.0f}".format(totals.outstanding) }}</div><div class="kpi-foot">已开票 - 已回款</div></div>
+  <div class="card kpi"><div class="kpi-ico">⏰</div><div class="kpi-label">逾期应收</div><div class="kpi-value" style="color:var(--red)">{{ "{:,.0f}".format(totals.overdue) }}</div><div class="kpi-foot">已过应收到期日</div></div>
+  <div class="card kpi"><div class="kpi-ico">📄</div><div class="kpi-label">未开票金额</div><div class="kpi-value" style="color:var(--amber)">{{ "{:,.0f}".format(totals.unbilled) }}</div><div class="kpi-foot">合同额 - 已开票</div></div>
+</div>
+
+<div class="card card-pad">
+  <div class="section-head"><div><h2 class="card-title">应收账龄</h2><p class="card-sub">按已开票未回款金额分桶。</p></div></div>
+  <div class="grid-3">
+    {% for b in aging %}
+    <div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px">
+      <div class="muted" style="font-size:12px">{{ b.label }}</div>
+      <div style="font-size:20px;font-weight:750;margin-top:4px;color:{{ '#dc2626' if b.key in ['D61_90','D90_PLUS'] else ('#d97706' if b.key in ['D1_30','D31_60'] else '#1d4ed8') }}">{{ "{:,.0f}".format(b.amount) }}</div>
+      <div class="muted" style="font-size:11.5px">{{ b.count }} 笔</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card card-pad" style="margin-top:18px">
+  <div class="toolbar">
+    <form class="search" method="get" action="/fin/receivables">
+      <input class="input" name="q" value="{{ q }}" placeholder="搜索合同编号 / 合同名称 / 客户"/>
+      <select class="select" name="status" style="width:150px">
+        <option value="">全部状态</option>
+        <option value="OVERDUE" {% if status == 'OVERDUE' %}selected{% endif %}>已逾期</option>
+        <option value="PARTIAL" {% if status == 'PARTIAL' %}selected{% endif %}>部分收款</option>
+        <option value="UNPAID" {% if status == 'UNPAID' %}selected{% endif %}>未收款</option>
+        <option value="PAID" {% if status == 'PAID' %}selected{% endif %}>已收款</option>
+        <option value="UNINVOICED" {% if status == 'UNINVOICED' %}selected{% endif %}>未开票</option>
+      </select>
+      <button class="btn btn-ghost" type="submit">筛选</button>
+      {% if q or status %}<a class="btn btn-ghost" href="/fin/receivables">清空</a>{% endif %}
+    </form>
+    <span class="muted">合同 {{ contracts|length }} 份 / 里程碑 {{ milestones|length }} 条</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>合同编号</th><th>客户</th><th>合同金额</th><th>已开票</th><th>已回款</th><th>应收余额</th><th>逾期</th><th>未开票</th><th>开票率</th><th>回款率</th><th>状态</th></tr></thead>
+      <tbody>
+      {% for row in contracts %}
+        {% set c = row.contract %}
+        <tr>
+          <td><a href="/detail/contract/{{ c.id }}">{{ c.contract_no }}</a><div class="muted" style="font-size:11.5px">{{ c.contract_name }}</div></td>
+          <td>{{ c.customer_name or '' }}</td>
+          <td>{{ "{:,.0f}".format(row.contract_amount) }}</td>
+          <td>{{ "{:,.0f}".format(row.invoiced) }}</td>
+          <td>{{ "{:,.0f}".format(row.paid) }}</td>
+          <td><b>{{ "{:,.0f}".format(row.outstanding) }}</b></td>
+          <td style="color:{{ 'var(--red)' if row.overdue > 0 else 'var(--muted)' }}">{{ "{:,.0f}".format(row.overdue) }}</td>
+          <td>{{ "{:,.0f}".format(row.unbilled) }}</td>
+          <td>{{ "{:.1f}%".format(row.invoice_rate * 100) }}</td>
+          <td>{{ "{:.1f}%".format(row.collection_rate * 100) }}</td>
+          <td>
+            {% if row.status == 'PAID' %}<span class="badge badge-green">已收款</span>
+            {% elif row.status == 'OVERDUE' %}<span class="badge badge-red">已逾期</span>
+            {% elif row.status == 'PARTIAL' %}<span class="badge badge-amber">部分收款</span>
+            {% elif row.status == 'UNINVOICED' %}<span class="badge badge-gray">未开票</span>
+            {% else %}<span class="badge badge-blue">未收款</span>{% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="11"><div class="empty">暂无合同应收数据</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card card-pad" style="margin-top:18px">
+  <div class="section-head"><div><h2 class="card-title">里程碑明细</h2><p class="card-sub">应收余额只统计已开票未回款；未开票金额单独展示。</p></div></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>合同</th><th>里程碑</th><th>金额</th><th>已开票</th><th>已回款</th><th>应收余额</th><th>未开票</th><th>应收到期日</th><th>逾期天数</th><th>状态</th><th class="right">操作</th></tr></thead>
+      <tbody>
+      {% for row in milestones %}
+        {% set m = row.milestone %}
+        {% set c = row.contract %}
+        <tr>
+          <td><a href="/detail/contract/{{ c.id }}">{{ c.contract_no }}</a><div class="muted" style="font-size:11.5px">{{ c.customer_name or '' }}</div></td>
+          <td><b>{{ m.milestone_name }}</b><div class="muted" style="font-size:11.5px">{{ m.milestone_code or '' }}</div></td>
+          <td>{{ "{:,.0f}".format(row.amount) }}</td>
+          <td>{{ "{:,.0f}".format(row.invoiced) }}</td>
+          <td>{{ "{:,.0f}".format(row.paid) }}</td>
+          <td><b>{{ "{:,.0f}".format(row.outstanding) }}</b></td>
+          <td>{{ "{:,.0f}".format(row.unbilled) }}</td>
+          <td>{{ row.due or '' }}</td>
+          <td style="color:{{ 'var(--red)' if row.days_overdue > 0 else 'var(--muted)' }}">{{ row.days_overdue if row.days_overdue > 0 else '-' }}</td>
+          <td>
+            {% if row.status == 'PAID' %}<span class="badge badge-green">已收款</span>
+            {% elif row.status == 'OVERDUE' %}<span class="badge badge-red">已逾期</span>
+            {% elif row.status == 'PARTIAL' %}<span class="badge badge-amber">部分收款</span>
+            {% elif row.status == 'UNINVOICED' %}<span class="badge badge-gray">未开票</span>
+            {% else %}<span class="badge badge-blue">未收款</span>{% endif %}
+          </td>
+          <td class="right"><a class="btn btn-ghost btn-sm" href="/fin/milestones/{{ m.id }}">开票/回款</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="11"><div class="empty">暂无里程碑数据</div></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

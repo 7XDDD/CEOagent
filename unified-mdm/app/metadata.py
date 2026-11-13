@@ -148,6 +148,7 @@ EXECUTION_STATUS_OPTS = [
     opt("TERMINATED", "已终止"),
 ]
 INVOICE_STATUS_OPTS = [opt("NOT_STARTED", "未开票"), opt("PARTIAL", "部分开票"), opt("COMPLETED", "已开票")]
+MILESTONE_INVOICE_STATUS_OPTS = [opt("UNINVOICED", "未开票"), opt("PARTIAL", "部分开票"), opt("INVOICED", "已开票")]
 PAYMENT_STATUS_OPTS = [opt("UNPAID", "未收款"), opt("PARTIAL", "部分收款"), opt("PAID", "已收款")]
 MILESTONE_TYPE_OPTS = [
     opt("SIGN", "签约"),
@@ -717,7 +718,7 @@ E(
         F("actual_invoice_year", "实际开票年份", "number", value_type="int", list=False),
         F("actual_month", "实际开票月份", "number", value_type="int", list=False),
         F("actual_date", "实际开票日期", "date", list=False),
-        F("invoice_status", "开票状态", "select", options=INVOICE_STATUS_OPTS, default="UNINVOICED"),
+        F("invoice_status", "开票状态", "select", options=MILESTONE_INVOICE_STATUS_OPTS, default="UNINVOICED"),
         F("planned_complete_date", "计划完成日期", "date", list=False),
         F("actual_complete_date", "实际完成日期", "date", list=False),
         F("milestone_status", "里程碑状态", "select", options=MILESTONE_STATUS_OPTS, default="PENDING"),

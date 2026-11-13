@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}财务看板 · {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1 class="page-title">财务经营看板</h1>
+    <div class="page-desc">合同、收入、成本、回款、利润、现金流一屏看清；数据来自统一合同台账、项目成本与预算。</div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="/fin/receivables">应收与回款</a>
+    <a class="btn btn-ghost" href="/fin/cashflow">现金流预测</a>
+    <a class="btn btn-primary" href="/fin/costs">录入成本</a>
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="card kpi"><div class="kpi-ico">📜</div><div class="kpi-label">合同总额</div><div class="kpi-value">{{ "{:,.0f}".format(data.contract_total) }}</div><div class="kpi-foot">{{ data.contract_count }} 份合同</div></div>
+  <div class="card kpi"><div class="kpi-ico">🧾</div><div class="kpi-label">已开票收入</div><div class="kpi-value">{{ "{:,.0f}".format(data.invoiced_total) }}</div><div class="kpi-foot">确认收入口径</div></div>
+  <div class="card kpi"><div class="kpi-ico">💰</div><div class="kpi-label">已回款</div><div class="kpi-value" style="color:var(--green)">{{ "{:,.0f}".format(data.paid_total) }}</div><div class="kpi-foot">按里程碑累计</div></div>
+  <div class="card kpi"><div class="kpi-ico">📥</div><div class="kpi-label">应收余额</div><div class="kpi-value">{{ "{:,.0f}".format(data.ar_total) }}</div><div class="kpi-foot">已开票未回款</div></div>
+  <div class="card kpi"><div class="kpi-ico">⏰</div><div class="kpi-label">逾期应收</div><div class="kpi-value" style="color:var(--red)">{{ "{:,.0f}".format(data.overdue_total) }}</div><div class="kpi-foot">已过应收到期日</div></div>
+  <div class="card kpi"><div class="kpi-ico">🧮</div><div class="kpi-label">项目成本</div><div class="kpi-value">{{ "{:,.0f}".format(data.cost_total) }}</div><div class="kpi-foot">人工、费用、分包</div></div>
+  <div class="card kpi"><div class="kpi-ico">📈</div><div class="kpi-label">项目毛利</div><div class="kpi-value" style="color:{{ 'var(--red)' if data.gross_profit < 0 else 'var(--green)' }}">{{ "{:,.0f}".format(data.gross_profit) }}</div><div class="kpi-foot">已开票收入 - 项目成本</div></div>
+  <div class="card kpi"><div class="kpi-ico">🎯</div><div class="kpi-label">综合毛利率</div><div class="kpi-value">{{ "{:.1f}%".format(data.gross_margin * 100) if data.gross_margin is not none else '-' }}</div><div class="kpi-foot">项目盈利水平</div></div>
+</div>
+
+<div class="grid-2">
+  <div class="card card-pad">
+    <div class="section-head">
+      <div><h2 class="card-title">月度经营趋势</h2><p class="card-sub">按开票、成本、回款发生月份汇总。</p></div>
+      <span class="badge badge-blue">2026</span>
+    </div>
+    {% set max_rev = (data.monthly|map(attribute='revenue')|max) or 1 %}
+    {% set max_cost = (data.monthly|map(attribute='cost')|max) or 1 %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>月份</th><th>收入</th><th>成本</th><th>毛利</th><th>回款</th><th style="width:180px">收入 / 成本</th></tr></thead>
+        <tbody>
+        {% for m in data.monthly %}
+          <tr>
+            <td><b>{{ m.label }}</b></td>
+            <td>{{ "{:,.0f}".format(m.revenue) }}</td>
+            <td>{{ "{:,.0f}".format(m.cost) }}</td>
+            <td style="color:{{ 'var(--red)' if m.gross_profit < 0 else 'var(--green)' }}">{{ "{:,.0f}".format(m.gross_profit) }}</td>
+            <td>{{ "{:,.0f}".format(m.cash_in) }}</td>
+            <td>
+              <div style="height:7px;background:#eef2f7;border-radius:999px;overflow:hidden;margin-bottom:4px"><div style="height:100%;width:{{ (m.revenue / max_rev * 100)|round(0) }}%;background:#3b82f6"></div></div>
+              <div style="height:7px;background:#eef2f7;border-radius:999px;overflow:hidden"><div style="height:100%;width:{{ (m.cost / max_cost * 100)|round(0) }}%;background:#f59e0b"></div></div>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6"><div class="empty">暂无经营数据</div></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card card-pad">
+    <div class="section-head">
+      <div><h2 class="card-title">应收账龄</h2><p class="card-sub">已开票未回款按到期日分桶。</p></div>
+      <a class="btn btn-ghost btn-sm" href="/fin/receivables">明细</a>
+    </div>
+    {% set max_aging = (data.aging|map(attribute='amount')|max) or 1 %}
+    {% for b in data.aging %}
+    <div style="display:grid;grid-template-columns:90px 1fr 110px;gap:10px;align-items:center;margin:12px 0">
+      <div style="font-size:12.5px;color:#475569">{{ b.label }}</div>
+      <div style="height:10px;background:#eef2f7;border-radius:999px;overflow:hidden"><div style="height:100%;width:{{ (b.amount / max_aging * 100)|round(0) }}%;background:{{ '#dc2626' if b.key in ['D61_90','D90_PLUS'] else ('#f59e0b' if b.key in ['D1_30','D31_60'] else '#3b82f6') }};border-radius:999px"></div></div>
+      <div style="text-align:right;font-size:12.5px"><b>{{ "{:,.0f}".format(b.amount) }}</b> <span class="muted">/ {{ b.count }} 笔</span></div>
+    </div>
+    {% endfor %}
+    <div class="notice" style="margin-top:14px">应收余额 = 已开票金额 - 已回款金额；未开票里程碑单独在应收页面展示。</div>
+  </div>
+</div>
+
+<div class="grid-2" style="margin-top:18px">
+  <div class="card card-pad">
+    <div class="section-head">
+      <div><h2 class="card-title">项目盈利排行</h2><p class="card-sub">按项目毛利从高到低，点击进入项目损益。</p></div>
+      <a class="btn btn-ghost btn-sm" href="/fin/projects">全部项目</a>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>项目</th><th>收入</th><th>成本</th><th>毛利</th><th>毛利率</th></tr></thead>
+        <tbody>
+        {% for row in data.top_projects %}
+          <tr>
+            <td><a href="/fin/projects/{{ row.project.id }}">{{ row.project.project_code }}</a><div class="muted" style="font-size:11.5px">{{ row.project.project_name }}</div></td>
+            <td>{{ "{:,.0f}".format(row.revenue) }}</td>
+            <td>{{ "{:,.0f}".format(row.total_cost) }}</td>
+            <td style="color:{{ 'var(--red)' if row.gross_profit < 0 else 'var(--green)' }}"><b>{{ "{:,.0f}".format(row.gross_profit) }}</b></td>
+            <td>{% if row.gross_margin is not none %}{{ "{:.1f}%".format(row.gross_margin * 100) }}{% else %}-{% endif %}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5"><div class="empty">暂无项目数据</div></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card card-pad">
+    <div class="section-head">
+      <div><h2 class="card-title">风险预警</h2><p class="card-sub">逾期、亏损、低毛利、超预算、信用超额。</p></div>
+      <span class="badge badge-red">{{ data.alerts|length }} 项</span>
+    </div>
+    {% for a in data.alerts %}
+    <div style="border-left:3px solid {{ '#dc2626' if a.level == 'red' else '#d97706' }};background:{{ '#fef2f2' if a.level == 'red' else '#fffbeb' }};padding:10px 12px;border-radius:8px;margin-bottom:9px">
+      <div style="font-weight:700;font-size:13px"><a href="{{ a.link }}" style="color:inherit">{{ a.title }}</a></div>
+      <div class="muted" style="font-size:12px;margin-top:2px">{{ a.detail }}</div>
+    </div>
+    {% else %}
+    <div class="empty">暂无风险预警</div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="grid-2" style="margin-top:18px">
+  <div class="card card-pad">
+    <div class="section-head">
+      <div><h2 class="card-title">客户盈利</h2><p class="card-sub">按客户收入排序，关注客户集中度和毛利率。</p></div>
+      <a class="btn btn-ghost btn-sm" href="/fin/customers">全部客户</a>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>客户</th><th>收入</th><th>成本</th><th>毛利</th><th>应收</th></tr></thead>
+        <tbody>
+        {% for row in data.top_customers %}
+          <tr>
+            <td><a href="/detail/customer/{{ row.customer.id }}">{{ row.customer.customer_name }}</a></td>
+            <td>{{ "{:,.0f}".format(row.invoiced) }}</td>
+            <td>{{ "{:,.0f}".format(row.total_cost) }}</td>
+            <td style="color:{{ 'var(--red)' if row.gross_profit < 0 else 'var(--green)' }}">{{ "{:,.0f}".format(row.gross_profit) }}</td>
+            <td>{{ "{:,.0f}".format(row.outstanding) }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5"><div class="empty">暂无客户数据</div></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card card-pad">
+    <div class="section-head">
+      <div><h2 class="card-title">未来回款与现金</h2><p class="card-sub">未来 6 个月合同计划回款与预算成本支出。</p></div>
+      <a class="btn btn-ghost btn-sm" href="/fin/cashflow">现金流</a>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>月份</th><th>预计流入</th><th>预计流出</th><th>净现金流</th></tr></thead>
+        <tbody>
+        {% for row in data.cashflow.rows if row.kind == 'FORECAST' %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td>{{ "{:,.0f}".format(row.inflow) }}</td>
+            <td>{{ "{:,.0f}".format(row.outflow) }}</td>
+            <td style="color:{{ 'var(--red)' if row.net < 0 else 'var(--green)' }}"><b>{{ "{:,.0f}".format(row.net) }}</b></td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4"><div class="empty">暂无预测数据</div></td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

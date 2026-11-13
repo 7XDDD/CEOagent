@@ -29,6 +29,15 @@
   </div>
 </div>
 
+<div class="kpi-grid" style="margin-top:18px">
+  <div class="card kpi"><div class="kpi-label">合同金额</div><div class="kpi-value" style="font-size:24px">{{ "{:,.0f}".format(fin.contract_amount) }}</div><div class="kpi-foot">{{ fin.contract_count }} 份合同</div></div>
+  <div class="card kpi"><div class="kpi-label">确认收入</div><div class="kpi-value" style="font-size:24px">{{ "{:,.0f}".format(fin.invoiced) }}</div><div class="kpi-foot">已开票收入</div></div>
+  <div class="card kpi"><div class="kpi-label">客户成本</div><div class="kpi-value" style="font-size:24px">{{ "{:,.0f}".format(fin.total_cost) }}</div><div class="kpi-foot">项目成本合计</div></div>
+  <div class="card kpi"><div class="kpi-label">客户毛利</div><div class="kpi-value" style="font-size:24px;color:{{ 'var(--red)' if fin.gross_profit < 0 else 'var(--green)' }}">{{ "{:,.0f}".format(fin.gross_profit) }}</div><div class="kpi-foot">毛利率 {{ "{:.1f}%".format(fin.gross_margin * 100) if fin.gross_margin is not none else '-' }}</div></div>
+  <div class="card kpi"><div class="kpi-label">应收余额</div><div class="kpi-value" style="font-size:24px">{{ "{:,.0f}".format(fin.outstanding) }}</div><div class="kpi-foot">已开票未回款</div></div>
+  <div class="card kpi"><div class="kpi-label">逾期应收</div><div class="kpi-value" style="font-size:24px;color:var(--red)">{{ "{:,.0f}".format(fin.overdue) }}</div><div class="kpi-foot">信用额度使用率 {{ "{:.1f}%".format(fin.credit_usage * 100) if fin.credit_usage is not none else '-' }}</div></div>
+</div>
+
 <div class="tabs">
   <a class="active" href="#contacts">联系人（{{ contacts|length }}）</a>
   <a href="#addresses">地址（{{ addresses|length }}）</a>
