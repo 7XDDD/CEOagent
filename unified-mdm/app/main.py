@@ -79,7 +79,7 @@ from .seed import ensure_finance_permissions, seed, seed_finance
 
 BASE_DIR = Path(__file__).resolve().parent
 
-app = FastAPI(title="链宇 · 大一统平台 · 主数据", version="1.0.0")
+app = FastAPI(title="链宇 · 整合平台", version="1.0.0")
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
@@ -136,7 +136,7 @@ def page_ctx(request: Request, db: Session, **kwargs):
         "request": request,
         "current_user": user,
         "current_role": role,
-        "app_name": "链宇 · 大一统平台",
+        "app_name": "链宇 · 整合平台",
         **kwargs,
     }
 

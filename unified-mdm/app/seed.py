@@ -546,7 +546,7 @@ def seed():
         ]
         db.add_all(items)
 
-        db.add(AuditLog(user_id=users[0].id, username="admin", action="INIT", entity="system", entity_id=0, detail="初始化平台底座与主数据种子", ip="127.0.0.1", create_time=datetime.now()))
+        db.add(AuditLog(user_id=users[0].id, username="admin", action="INIT", entity="system", entity_id=0, detail="初始化整合平台与主数据种子", ip="127.0.0.1", create_time=datetime.now()))
         db.commit()
     except Exception:
         db.rollback()

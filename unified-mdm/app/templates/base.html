@@ -11,9 +11,12 @@
 <div class="layout">
   <aside class="sidebar">
     <div class="brand">
-      <a href="/mdm" style="color:inherit;text-decoration:none">
-        <div class="brand-title">链宇 · 大一统平台</div>
-        <div class="brand-sub">主数据 · CRM · 财务经营</div>
+      <a class="brand-link" href="/mdm">
+        <span class="brand-mark">LY</span>
+        <span class="brand-text">
+          <span class="brand-title">链宇 · 整合平台</span>
+          <span class="brand-sub">主数据 · CRM · 财务经营</span>
+        </span>
       </a>
     </div>
     <nav class="nav">
@@ -66,8 +69,20 @@
   </aside>
   <div class="main">
     <header class="topbar">
-      <div class="crumb"><strong>主数据管理</strong> · 统一组织、人员、客户、项目、合同</div>
+      <div class="crumb">
+        <span class="crumb-root">整合平台</span>
+        <span class="crumb-sep">/</span>
+        <strong>
+          {% if path.startswith('/fin') %}财务经营
+          {% elif path.startswith('/crm') %}CRM 业务
+          {% elif path.startswith('/md/') %}主数据
+          {% elif path.startswith('/org') %}组织架构
+          {% elif path.startswith('/audit') %}审计治理
+          {% else %}统一经营视图{% endif %}
+        </strong>
+      </div>
       <div class="user">
+        <span class="status-pill"><span class="dot"></span>平台运行中</span>
         <div class="avatar">{{ (current_user.real_name or current_user.username)[0] if current_user else '?' }}</div>
         <div class="user-meta">
           <b>{{ current_user.real_name if current_user else '未登录' }}</b>
