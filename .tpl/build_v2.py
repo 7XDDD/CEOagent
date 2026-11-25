@@ -1,0 +1,499 @@
+# -*- coding: utf-8 -*-
+"""链宇技术 · 业务链路与核心数据（讨论稿）—— 官方模板视觉体系"""
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.dml.color import RGBColor
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR, MSO_AUTO_SIZE
+from pptx.enum.shapes import MSO_SHAPE, MSO_CONNECTOR
+from pptx.enum.dml import MSO_LINE
+from pptx.oxml.ns import qn
+from lxml import etree
+
+W, H = 13.333, 7.5
+M = 0.85
+CW = W - 2 * M
+
+NAVY    = RGBColor(0x09, 0x31, 0x94)
+BLUE    = RGBColor(0x15, 0x7C, 0xEF)
+RED     = RGBColor(0xF0, 0x24, 0x2B)
+BLACK   = RGBColor(0x00, 0x00, 0x00)
+GRAY    = RGBColor(0x52, 0x53, 0x54)
+LIGHT   = RGBColor(0xF7, 0xF9, 0xFB)
+WHITE   = RGBColor(0xFF, 0xFF, 0xFF)
+HAIR    = RGBColor(0xE3, 0xE9, 0xF4)
+HEAD_BG = RGBColor(0xDE, 0xE9, 0xFB)
+PANEL   = RGBColor(0xEF, 0xF4, 0xFC)
+BORDER  = RGBColor(0xBF, 0xD3, 0xEE)
+MUTED   = RGBColor(0x8A, 0x93, 0xA3)
+DARK1   = RGBColor(0x1A, 0x27, 0x46)
+DARK2   = RGBColor(0x12, 0x30, 0x6C)
+SUBTXT  = RGBColor(0xC9, 0xD3, 0xE4)
+FONT = "微软雅黑"
+
+prs = Presentation()
+prs.slide_width = Inches(W)
+prs.slide_height = Inches(H)
+BLANK = prs.slide_layouts[6]
+LOGO_W = ".tpl/logo_white.png"
+LOGO_N = ".tpl/logo_navy.png"
+
+
+# ------------------------------------------------------------------ helpers
+def style_run(r, size=9, color=BLACK, bold=False, spc=None):
+    f = r.font
+    f.size = Pt(size)
+    f.bold = bold
+    f.color.rgb = color
+    f.name = "Arial"
+    rPr = r._r.get_or_add_rPr()
+    ea = etree.SubElement(rPr, qn('a:ea'))
+    ea.set('typeface', FONT)
+    if spc is not None:
+        rPr.set('spc', str(spc))
+
+
+def txt(slide, x, y, w, h, text, size=9, color=BLACK, bold=False,
+        align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.TOP, spacing=1.25, spc=None):
+    tb = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    tf.vertical_anchor = anchor
+    tf.auto_size = MSO_AUTO_SIZE.NONE
+    for i, ln in enumerate(text.split("\n")):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        p.alignment = align
+        p.line_spacing = spacing
+        r = p.add_run()
+        r.text = ln
+        style_run(r, size, color, bold, spc)
+    return tb
+
+
+def _strip(sp):
+    st = sp._element.find(qn('p:style'))
+    if st is not None:
+        sp._element.remove(st)
+
+
+def rect(slide, x, y, w, h, fill=None, line=None, lw=0.75,
+         shape=MSO_SHAPE.RECTANGLE, radius=None, alpha=None):
+    if radius is not None:
+        shape = MSO_SHAPE.ROUNDED_RECTANGLE
+    sp = slide.shapes.add_shape(shape, Inches(x), Inches(y), Inches(w), Inches(h))
+    sp.shadow.inherit = False
+    _strip(sp)
+    if radius is not None:
+        try:
+            sp.adjustments[0] = radius
+        except Exception:
+            pass
+    if fill is None:
+        sp.fill.background()
+    else:
+        sp.fill.solid()
+        sp.fill.fore_color.rgb = fill
+        if alpha is not None:
+            sf = sp.fill._xPr.find(qn('a:solidFill'))
+            a = etree.SubElement(sf[0], qn('a:alpha'))
+            a.set('val', str(int(alpha * 1000)))
+    if line is None:
+        sp.line.fill.background()
+    else:
+        sp.line.color.rgb = line
+        sp.line.width = Pt(lw)
+    tf = sp.text_frame
+    tf.word_wrap = True
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    return sp
+
+
+def line(slide, x1, y1, x2, y2, color=HAIR, lw=0.75, alpha=None, dash=None):
+    ln = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(x1), Inches(y1),
+                                    Inches(x2), Inches(y2))
+    ln.shadow.inherit = False
+    _strip(ln)
+    ln.line.color.rgb = color
+    ln.line.width = Pt(lw)
+    if dash:
+        ln.line.dash_style = dash
+    if alpha is not None:
+        sf = ln.line._get_or_add_ln().find(qn('a:solidFill'))
+        if sf is not None:
+            a = etree.SubElement(sf[0], qn('a:alpha'))
+            a.set('val', str(int(alpha * 1000)))
+    return ln
+
+
+def arrow(slide, x1, y1, x2, y2, color=BLUE, lw=1.1, dash=None, head=True):
+    ln = line(slide, x1, y1, x2, y2, color, lw, dash=dash)
+    if head:
+        lnel = ln.line._get_or_add_ln()
+        tail = etree.SubElement(lnel, qn('a:tailEnd'))
+        tail.set('type', 'triangle')
+        tail.set('w', 'sm')
+        tail.set('len', 'sm')
+    return ln
+
+
+def logo(slide, dark=True, h=0.34):
+    slide.shapes.add_picture(LOGO_W if dark else LOGO_N, Inches(12.02), Inches(0.30), height=Inches(h))
+
+
+def dark_bg(slide):
+    r = rect(slide, 0, 0, W, H)
+    r.fill.gradient()
+    r.fill.gradient_angle = 135
+    st = r.fill.gradient_stops
+    st[0].color.rgb = DARK1
+    st[0].position = 0.0
+    st[1].color.rgb = DARK2
+    st[1].position = 1.0
+    rect(slide, 4.4, 1.4, 9.0, 6.6, fill=RGBColor(0x2E, 0x5D, 0xBB), shape=MSO_SHAPE.OVAL, alpha=6)
+    sq = [(2.05, 0.85, 0.52, 3), (3.05, 0.85, 0.52, 3), (4.05, 1.45, 0.52, 3),
+          (5.05, 0.25, 0.52, 3), (6.05, 1.45, 0.52, 4), (7.05, 0.85, 0.52, 4),
+          (8.05, 0.85, 0.52, 3), (9.05, 0.25, 0.52, 3), (3.55, 2.35, 0.52, 2),
+          (4.55, 2.85, 0.52, 3), (9.55, 1.55, 0.52, 2), (10.55, 0.85, 0.52, 2),
+          (5.55, 2.15, 0.52, 3), (8.55, 2.15, 0.52, 2), (6.55, 0.25, 0.52, 4)]
+    for x, y, s_, a in sq:
+        rect(slide, x, y, s_, s_, fill=WHITE, alpha=a)
+    for cx_, rot in ((11.70, 17), (14.10, -17)):
+        b = rect(slide, cx_ - 0.43, 0.55, 0.86, 8.0, fill=WHITE, alpha=2.4)
+        b.rotation = rot
+    for y in (1.35, 2.55, 3.75):
+        line(slide, 0.45, y, 12.9, y, WHITE, 0.5, alpha=8)
+
+
+def light_bg(slide):
+    rect(slide, 0, 0, W, H, fill=LIGHT)
+    rect(slide, 10.1, 4.4, 5.6, 5.6, fill=RGBColor(0xE9, 0xF1, 0xFD), shape=MSO_SHAPE.OVAL, alpha=45)
+    for w_, h_, a in [(3.2, 3.2, 20), (5.0, 5.0, 14), (6.8, 6.8, 9)]:
+        rect(slide, -2.2 - w_ / 2, 8.2 - h_ / 2, w_, h_, fill=None,
+             line=RGBColor(0x9E, 0xBC, 0xE8), lw=0.5, shape=MSO_SHAPE.OVAL, alpha=a)
+    rect(slide, 0, 6.9, W, 0.6, fill=RGBColor(0xEC, 0xF3, 0xFD), alpha=40)
+
+
+def chrome(slide, title, page, sub=None):
+    light_bg(slide)
+    rect(slide, 0.55, 0.44, 0.09, 0.13, fill=RED, radius=0.5)
+    rect(slide, 0.55, 0.57, 0.09, 0.21, fill=NAVY, radius=0.5)
+    txt(slide, 0.78, 0.38, 10.8, 0.42, title, 22, BLACK, True, spacing=1.0)
+    if sub:
+        txt(slide, M, 1.02, CW, 0.28, sub, 9.8, GRAY, spacing=1.2)
+    logo(slide, dark=False)
+    line(slide, 0.55, 7.02, 12.78, 7.02, HAIR, 0.5)
+    txt(slide, 0.55, 7.09, 5.0, 0.22, "链宇技术©2026 商业机密", 8, MUTED, spc=20)
+    txt(slide, 11.78, 7.09, 1.0, 0.22, f"{page}", 8, MUTED, align=PP_ALIGN.RIGHT)
+
+
+def section(num, title, subtitle, page):
+    s = prs.slides.add_slide(BLANK)
+    dark_bg(s)
+    logo(s, dark=True)
+    txt(s, 0, 2.02, W, 0.24, f"SECTION {num}", 9, RGBColor(0x8F, 0xA9, 0xD6), True,
+        align=PP_ALIGN.CENTER, spc=240)
+    line(s, 4.32, 2.36, 9.0, 2.36, WHITE, 0.6, alpha=22)
+    txt(s, 0, 2.56, W, 0.62, title, 30, WHITE, True, align=PP_ALIGN.CENTER, spacing=1.1)
+    line(s, 4.32, 3.34, 9.0, 3.34, WHITE, 0.6, alpha=22)
+    txt(s, 0, 3.52, W, 0.3, subtitle, 11, SUBTXT, align=PP_ALIGN.CENTER, spacing=1.2)
+    cx, cy = 6.67, 10.35
+    for h_ in (6.5, 8.4, 10.3):
+        rect(s, cx - h_ / 2, cy - h_ / 2, h_, h_, fill=None,
+             line=RGBColor(0x5B, 0x84, 0xD2), lw=0.6, shape=MSO_SHAPE.OVAL, alpha=38)
+    for w_ in (2.4, 4.6, 7.0):
+        rect(s, cx - w_ / 2, cy - 5.15, w_, 10.3, fill=None,
+             line=RGBColor(0x5B, 0x84, 0xD2), lw=0.6, shape=MSO_SHAPE.OVAL, alpha=30)
+    for y in (5.15, 6.15):
+        line(s, 0.4, y, 12.93, y, WHITE, 0.5, alpha=7)
+    return s
+
+
+def node(slide, x, y, w, h, code, name, master, discuss=False):
+    rect(slide, x, y, w, h, fill=WHITE, line=BORDER, lw=0.8, radius=0.07)
+    txt(slide, x + 0.12, y + 0.08, 0.42, 0.2, code, 7.2, BLUE, True, spc=20)
+    txt(slide, x + 0.5, y + 0.06, w - 0.72, 0.26, name, 8.6, BLACK, True, spacing=1.0)
+    txt(slide, x + 0.12, y + 0.38, w - 0.2, 0.3, master, 6.6, NAVY, spacing=1.15)
+    if discuss:
+        rect(slide, x + w - 0.18, y + 0.09, 0.09, 0.09, fill=RED, shape=MSO_SHAPE.OVAL)
+
+
+# ================================================================== 01 cover
+s = prs.slides.add_slide(BLANK)
+dark_bg(s)
+logo(s, dark=True)
+txt(s, 1.0, 2.10, 8.6, 0.3, "链宇技术  /  2026 内部讨论稿", 10, SUBTXT, spc=120)
+txt(s, 0.98, 2.44, 9.4, 1.7, "一条链路，一套数据", 36, WHITE, True, spacing=1.28)
+line(s, 1.02, 3.62, 3.1, 3.62, RGBColor(0x5B, 0x84, 0xD2), 1.2)
+txt(s, 1.0, 3.82, 8.8, 0.7,
+    "基于 CRM、PMT、HR、财务四套系统已有功能的业务链路梳理，\n以及这条链路上必须唯一的 24 项核心数据。",
+    12, SUBTXT, spacing=1.55)
+txt(s, 1.0, 5.95, 8.6, 0.6, "汇报方：链宇技术（Lianyu Technology）\n2026 年 11 月  |  内部绝密", 9,
+    RGBColor(0xA9, 0xB9, 0xD6), spacing=1.6)
+
+# ================================================================== 02 本稿说明
+s = prs.slides.add_slide(BLANK)
+chrome(s, "本稿怎么来的，怎么用", 2, "不是一套已定稿的方案，而是一条可以一起改的链路")
+blocks = [
+    ("01", "基于已有功能", "不新增系统、不假设重构。先把四套系统已经具备的能力，按客户签约到项目利润的顺序串起来。"),
+    ("02", "AI 辅助梳理", "用 AI 对四套系统的表、字段、单据关系做了比对，把同名不同义、同义不同名的字段先对齐，再画出这条链路。"),
+    ("03", "节点待确认", "链路中带“待讨论”标记的节点，需要和各位老师一起定实施方式；本稿只负责把问题摆到桌面上。"),
+]
+y = 1.55
+for n, t, d in blocks:
+    txt(s, M, y + 0.04, 0.5, 0.24, n, 9, BLUE, True, spc=40)
+    txt(s, M + 0.55, y, 3.2, 0.3, t, 12.5, BLACK, True, spacing=1.0)
+    txt(s, M + 4.0, y + 0.02, 3.9, 0.72, d, 9.3, GRAY, spacing=1.55)
+    y += 1.16
+    line(s, M, y - 0.12, 8.6, y - 0.12, HAIR, 0.6)
+
+rect(s, 8.95, 1.5, 3.53, 4.35, fill=PANEL, radius=0.04)
+rect(s, 8.95, 1.5, 3.53, 0.05, fill=RED, radius=0.5)
+txt(s, 9.18, 1.7, 3.0, 0.24, "待确认清单  /  TO CONFIRM", 8, RED, True, spc=100)
+items = [
+    ("工时归口", "工时填报放在 HR 还是 PMT？谁审批、谁锁定？"),
+    ("结算与开票", "合同里程碑直接开票，还是必须经结算单？"),
+    ("成本归集", "成本口径含不含外包与差旅？由财务还是项目归集？"),
+]
+for i, (t, d) in enumerate(items):
+    yy = 2.08 + i * 1.2
+    txt(s, 9.18, yy, 3.0, 0.24, f"0{i+1}  {t}", 9.5, NAVY, True, spacing=1.0)
+    txt(s, 9.18, yy + 0.3, 3.05, 0.7, d, 8.5, GRAY, spacing=1.45)
+rich_band = rect(s, M, 6.18, 8.6, 0.62, fill=NAVY, radius=0.06)
+txt(s, M + 0.26, 6.33, 8.1, 0.3, "使用方式：先对齐链路，再谈系统改造；链路没对齐，改造就会返工。",
+    9.5, WHITE, spacing=1.2)
+
+# ================================================================== 03 现状
+s = prs.slides.add_slide(BLANK)
+chrome(s, "数据本来就在，只是每次都要重新找一遍", 3, "站在用数据的人这边看：不是谁做得不好，是数据还没有一条统一的线")
+pains = [
+    ("每月汇报", "开四个系统、导四份表，同一个项目在四个文件里各有一个版本。",
+     "希望：一次取数，按项目自动汇总，口径不用再问人。"),
+    ("每次对账", "结算、开票、回款三张表人工勾稽，差异只能逐条回查。",
+     "希望：三张单子互相引用，差异自动定位到单号。"),
+    ("换人接手", "口径靠人记：算不算外包、含不含税，换个人就换个数。",
+     "希望：口径写在系统里，谁算都是同一个结果。"),
+    ("新人上手", "四套系统四套字段名，没人带就只能试错。",
+     "希望：一套业务语言，字段名对着业务动作走。"),
+]
+cw_ = (CW - 0.24) / 2
+for i, (t, now, hope) in enumerate(pains):
+    col, row = i % 2, i // 2
+    x = M + col * (cw_ + 0.24)
+    y = 1.55 + row * 2.18
+    rect(s, x, y, cw_, 1.98, fill=WHITE, line=BORDER, lw=0.8, radius=0.04)
+    rect(s, x, y, 0.05, 1.98, fill=RED if i % 2 == 0 else BLUE)
+    txt(s, x + 0.26, y + 0.18, 2.6, 0.26, t, 11.5, BLACK, True, spacing=1.0)
+    txt(s, x + 0.26, y + 0.56, cw_ - 0.5, 0.62, now, 9, GRAY, spacing=1.5)
+    line(s, x + 0.26, y + 1.2, x + cw_ - 0.28, y + 1.2, HAIR, 0.6)
+    txt(s, x + 0.26, y + 1.3, cw_ - 0.5, 0.5, hope, 9, BLUE, spacing=1.45)
+txt(s, M, 6.32, CW, 0.3, "这些重复动作，本质是同一个问题：同一条业务，被四套系统各记了一遍。", 9.5, NAVY, True)
+
+# ================================================================== 04 section 01
+section("01", "业务链路", "把四套系统的信息连成一条线，先看清，再优化。", 4)
+
+# ================================================================== 05 信息链路
+s = prs.slides.add_slide(BLANK)
+chrome(s, "信息链路：按系统分区，从客户走到利润", 5,
+       "只画信息与主数据，不画成本公式；带“待讨论”的节点需与各位老师确认实施方式")
+
+def band(y, h, code, name, cnt, color):
+    rect(s, M, y, CW, h, fill=RGBColor(0xF3, 0xF7, 0xFD), line=RGBColor(0xE1, 0xE9, 0xF6), lw=0.7, radius=0.03)
+    rect(s, M, y, 0.05, h, fill=color)
+    rect(s, M + 0.18, y + 0.14, 0.5, 0.22, fill=color, radius=0.3)
+    txt(s, M + 0.18, y + 0.17, 0.5, 0.16, code, 6.3, WHITE, True, align=PP_ALIGN.CENTER, spc=20)
+    txt(s, M + 0.78, y + 0.1, 1.6, 0.28, name, 9.8, BLACK, True, spacing=1.0)
+    txt(s, M + 0.78, y + 0.42, 1.6, 0.2, cnt, 7, MUTED)
+
+# CRM
+band(1.45, 0.92, "CRM", "客户系统", "2 节点", BLUE)
+node(s, 2.78, 1.56, 2.0, 0.7, "N1", "客户 / 商机", "客户 · 客户联系人")
+node(s, 5.06, 1.56, 2.0, 0.7, "N2", "合同签订", "合同 · 收款里程碑")
+arrow(s, 4.78, 1.91, 5.04, 1.91)
+txt(s, 7.45, 1.66, 4.5, 0.44, "客户与合同在这里建档；合同号对外唯一，是整条链路的起点。", 8.2, MUTED, spacing=1.4)
+
+# PMT
+band(2.45, 2.0, "PMT", "项目系统", "6 节点", NAVY)
+node(s, 5.06, 2.56, 2.0, 0.78, "N3", "立项 / 项目", "项目 · 项目类型")
+node(s, 7.34, 2.56, 2.0, 0.78, "N4", "阶段 / 任务 / 里程碑", "阶段 · WBS · 交付里程碑")
+node(s, 9.62, 2.56, 2.0, 0.78, "N5", "项目预算", "预算 · 预算科目")
+node(s, 9.62, 3.56, 2.0, 0.78, "N6", "人员配置", "员工 · 技能 · 成员期间")
+node(s, 7.34, 3.56, 2.0, 0.78, "N7", "工时填报 / 审批 / 锁定", "工时明细 · 工作日历", discuss=True)
+node(s, 5.06, 3.56, 2.0, 0.78, "N8", "结算", "结算单 · 结算单价")
+arrow(s, 6.06, 2.26, 6.06, 2.54)
+arrow(s, 7.06, 2.95, 7.32, 2.95)
+arrow(s, 9.34, 2.95, 9.60, 2.95)
+arrow(s, 10.62, 3.34, 10.62, 3.54)
+arrow(s, 9.62, 3.95, 9.36, 3.95)
+arrow(s, 7.34, 3.95, 7.08, 3.95)
+txt(s, 2.72, 3.16, 2.1, 0.9, "项目执行的主战场：\n立项、计划、预算、\n派工、工时、结算", 8.2, MUTED, spacing=1.5)
+
+# FIN
+band(4.55, 1.62, "FIN", "财务系统", "4 节点", RGBColor(0x0E, 0x4B, 0xA8))
+node(s, 5.06, 4.68, 2.0, 0.62, "N9", "开票", "发票 · 开票信息")
+node(s, 7.34, 4.68, 2.0, 0.62, "N10", "回款 / 应收", "回款单 · 应收余额")
+node(s, 5.06, 5.44, 2.0, 0.62, "N11", "成本归集", "成本单价 · 科目 · 期间", discuss=True)
+node(s, 9.62, 4.68, 2.0, 1.38, "N12", "利润 / 经营分析", "派生：项目利润视图\n收入线 × 成本线 在此汇合")
+arrow(s, 6.06, 4.34, 6.06, 4.66)
+arrow(s, 7.06, 4.99, 7.32, 4.99)
+arrow(s, 9.34, 4.99, 9.60, 4.99)
+arrow(s, 7.06, 5.75, 9.60, 5.75)
+txt(s, 2.72, 4.76, 2.15, 0.55, "开票触发：合同里程碑\n或结算单", 7.6, MUTED, spacing=1.4)
+txt(s, 2.72, 5.46, 2.15, 0.55, "成本归集：取工时与\n结算数据", 7.6, MUTED, spacing=1.4)
+
+# HR base
+band(6.25, 0.55, "HR", "数据底座", "支撑 N6 · N7 · N11", RGBColor(0x5B, 0x84, 0xD2))
+txt(s, 2.72, 6.36, 9.6, 0.22, "组织与岗位    ·    员工与技能    ·    工作日历    ·    成本单价    ·    工时规则",
+    8.2, NAVY, spacing=1.0)
+arrow(s, 6.06, 6.23, 6.06, 6.08, color=RGBColor(0x5B, 0x84, 0xD2), lw=0.9, dash=MSO_LINE.DASH)
+txt(s, 0.85, 6.85, 5.2, 0.16,
+    "实线：信息流转    虚线：底座供给", 7.2, MUTED)
+txt(s, 5.6, 6.85, 6.9, 0.16,
+    "● 红点：待与各位老师讨论的节点（N7、N11）    节点编号沿用链路 1", 7.2, MUTED)
+
+# ================================================================== 06 数据链路
+s = prs.slides.add_slide(BLANK)
+chrome(s, "数据链路：动作产生单据，单据引用主数据", 6, "与信息链路一一对应：五个业务对象，四层数据")
+cols = [("业务动作", "谁在系统里做什么", 2.95), ("数据对象", "留下哪张单 / 哪条记录", 3.15),
+        ("引用主数据", "统一到哪个编码", 3.0), ("形成指标", "最后能回答什么", 2.23)]
+xs = []
+for i, (t, d, w_) in enumerate(cols):
+    x = M if i == 0 else xs[-1] + cols[i - 1][2] + 0.1
+    xs.append(x)
+    rect(s, x, 1.45, w_, 0.62, fill=HEAD_BG if i < 2 else PANEL, radius=0.03)
+    txt(s, x + 0.14, 1.53, w_ - 0.2, 0.24, t, 9.2, NAVY, True, spacing=1.0)
+    txt(s, x + 0.14, 1.78, w_ - 0.2, 0.2, d, 6.8, MUTED)
+    if i < 3:
+        txt(s, x + w_ + 0.005, 1.63, 0.09, 0.2, "›", 10, BLUE, True, align=PP_ALIGN.CENTER)
+
+rows = [
+    ("客户与合同", "建档、推商机、签合同", "合同、收款里程碑", "客户、合同", "合同额、回款率"),
+    ("项目与计划", "立项、拆任务、编预算", "项目、任务、预算", "项目、阶段、WBS", "预算执行率"),
+    ("人员与工时", "配人、填报、审批锁定", "成员、工时明细", "员工、技能、日历", "人均产值、投入率"),
+    ("结算与收款", "结算、开票、收款核销", "结算单、发票、回款单", "结算单价、开票信息", "应收、逾期"),
+    ("成本与利润", "归集成本、复盘利润", "成本归集单", "成本单价、科目、期间", "项目毛利、EAC"),
+]
+y = 2.18
+for i, row in enumerate(rows):
+    if i % 2 == 0:
+        rect(s, M, y - 0.02, CW, 0.78, fill=RGBColor(0xFB, 0xFC, 0xFE))
+    obj, act, doc, md, kpi = row
+    txt(s, xs[0] + 0.14, y + 0.04, cols[0][2] - 0.24, 0.24, obj, 9.2, BLACK, True, spacing=1.0)
+    txt(s, xs[0] + 0.14, y + 0.3, cols[0][2] - 0.24, 0.38, act, 7.6, GRAY, spacing=1.25)
+    for j, val in ((1, doc), (2, md), (3, kpi)):
+        txt(s, xs[j] + 0.14, y + 0.08, cols[j][2] - 0.24, 0.55, val,
+            8.6, NAVY if j == 3 else GRAY, spacing=1.35)
+    line(s, M, y + 0.76, W - M, y + 0.76, HAIR, 0.6)
+    y += 0.78
+
+rect(s, M, 6.18, CW, 0.62, fill=PANEL, radius=0.04)
+txt(s, M + 0.24, 6.32, CW - 0.5, 0.3,
+    "口径：一行一条线——动作产生单据，单据必须引用主数据，主数据汇总成指标；任何一层断掉，指标就不可信。",
+    8.8, NAVY, spacing=1.2)
+
+# ================================================================== 07 section 02
+section("02", "核心数据", "哪些数据必须唯一，谁来负责。", 7)
+
+# ================================================================== 08 判断逻辑
+s = prs.slides.add_slide(BLANK)
+chrome(s, "四条同时满足，才进核心数据清单", 8, "不是所有表都值得统一；口径不清，治理就会变成全库搬家")
+crit = [
+    ("01", "被 2 个及以上环节引用", "不是某个模块的私有表；至少两个阶段读它、写它，才有统一的价值。"),
+    ("02", "有稳定、可对外的业务编码", "人能读、能写在合同和发票上；编码不随系统、不随组织架构变化。"),
+    ("03", "生命周期长于单据", "客户还在、合同执行完，主数据仍然存在；单据可以归档，主数据不能。"),
+    ("04", "变更需要审批或备案", "不能谁都能改；有变更流程，才有唯一版本和可追溯的历史。"),
+]
+y = 1.52
+line(s, M, y, W - M, y, HEAD_BG, 1.2)
+for n, t, d in crit:
+    txt(s, M, y + 0.2, 0.6, 0.26, n, 9.5, BLUE, True)
+    txt(s, M + 0.62, y + 0.17, 3.9, 0.3, t, 12, BLACK, True, spacing=1.05)
+    txt(s, M + 4.55, y + 0.19, 7.1, 0.55, d, 9.5, GRAY, spacing=1.5)
+    y += 1.08
+    line(s, M, y - 0.02, W - M, y - 0.02, HAIR, 0.6)
+rect(s, M, 5.96, CW, 0.62, fill=NAVY, radius=0.08)
+txt(s, M + 0.28, 6.10, CW - 0.5, 0.34,
+    "结果：24 项进入清单；其余留在业务表，只做字段规范，不做统一治理。", 10, WHITE, spacing=1.2)
+
+# ================================================================== 09 部门责任
+s = prs.slides.add_slide(BLANK)
+chrome(s, "每项数据只有一个 Owner", 9, "部门负责“产生与维护”，系统负责“唯一与留痕”，管理层负责“口径审批”")
+cols = [(M, 0.45, "#"), (M + 0.5, 1.55, "部门"), (M + 2.2, 4.0, "负责的数据"),
+        (M + 6.35, 2.75, "录入时点"), (M + 9.25, 2.3, "唯一性要求")]
+rect(s, M, 1.5, CW, 0.44, fill=HEAD_BG, radius=0.03)
+for x, w, t in cols:
+    txt(s, x, 1.59, w, 0.26, t, 8.2, NAVY, True, spc=60)
+
+dept = [
+    ("01", "销售", "客户、联系人、商机、合同、收款里程碑", "签约前 / 合同变更时", "客户号、合同号对外唯一"),
+    ("02", "交付（PMO）", "项目、阶段、任务、交付里程碑、项目预算", "立项、计划变更、验收", "项目号贯穿全链，不回填"),
+    ("03", "HR", "组织、岗位、员工、技能、日历、成本单价", "入离职、调岗、年度调价", "员工号唯一，单价带生效期"),
+    ("04", "财务", "开票信息、发票、回款、应收、科目、期间", "开票、收款、月结", "发票号唯一，期间不可跨"),
+    ("05", "管理层", "指标口径、审批规则、权限矩阵", "季度评审 / 口径变更", "口径变更留版本与审批"),
+]
+y = 1.94
+for i, row in enumerate(dept):
+    if i % 2 == 0:
+        rect(s, M, y, CW, 0.82, fill=RGBColor(0xFB, 0xFC, 0xFE))
+    txt(s, M, y + 0.3, 0.4, 0.24, row[0], 8.2, BLUE, True)
+    txt(s, M + 0.5, y + 0.26, 1.6, 0.3, row[1], 9.8, BLACK, True, spacing=1.0)
+    txt(s, M + 2.2, y + 0.26, 4.0, 0.5, row[2], 8.5, GRAY, spacing=1.3)
+    txt(s, M + 6.35, y + 0.26, 2.7, 0.5, row[3], 8.3, GRAY, spacing=1.3)
+    txt(s, M + 9.25, y + 0.26, 2.35, 0.5, row[4], 8.3, NAVY, spacing=1.3)
+    line(s, M, y + 0.84, W - M, y + 0.84, HAIR, 0.6)
+    y += 0.82
+txt(s, M, 6.3, CW, 0.24, "跨部门争议只有一种解法：回到“谁产生、谁维护、谁审批”，而不是谁的系统里能改。", 8.5, MUTED)
+
+# ================================================================== 10 section 03
+section("03", "规划", "从梳理到智能体，分三步走。", 10)
+
+# ================================================================== 11 路线图
+s = prs.slides.add_slide(BLANK)
+chrome(s, "短期打底，中期联通，长期智能", 11, "顺序不能反：系统各自跑不顺，联通就是放大混乱")
+phases = [
+    ("01", "梳理数据与 Owner", "定 24 项核心数据、责任人、口径与编码规则；出 12 个节点的字段对照表。", "验收：清单签字，口径唯一"),
+    ("02", "落到系统，各自跑顺", "四套系统各自补齐字段与校验，先做到单系统内闭环、数据可导出。", "验收：单系统月结不靠手工补"),
+    ("03", "数据联通", "统一主键与映射表，打通合同—项目—工时—结算—开票—回款。", "验收：一条链路可追溯"),
+    ("04", "CEO 智能体", "在联通数据上做经营问答、预警与预测，替代人工汇总。", "验收：问题当天有答案"),
+]
+cw4 = (CW - 3 * 0.18) / 4
+# 时间轴：短期跨两列，中期、长期各一列
+axis = [("短期  ·  0–3 个月", 0, 2, NAVY), ("中期  ·  3–6 个月", 2, 1, BLUE),
+        ("长期  ·  6–12 个月", 3, 1, RGBColor(0x5B, 0x84, 0xD2))]
+for label, idx, span, col in axis:
+    x = M + idx * (cw4 + 0.18)
+    w_ = span * cw4 + (span - 1) * 0.18
+    rect(s, x, 1.42, w_, 0.32, fill=col, radius=0.2)
+    txt(s, x, 1.48, w_, 0.2, label, 8, WHITE, True, align=PP_ALIGN.CENTER, spc=60)
+
+for i, (n, t, d, out) in enumerate(phases):
+    x = M + i * (cw4 + 0.18)
+    rect(s, x, 1.94, 0.38, 0.26, fill=PANEL, radius=0.12)
+    txt(s, x, 1.985, 0.38, 0.18, n, 7.8, NAVY, True, align=PP_ALIGN.CENTER, spc=40)
+    txt(s, x, 2.34, cw4 - 0.1, 0.55, t, 12.5, BLACK, True, spacing=1.15)
+    txt(s, x, 2.92, cw4 - 0.15, 1.3, d, 8.5, GRAY, spacing=1.55)
+    line(s, x, 4.0, x + cw4 - 0.15, 4.0, HAIR, 0.6)
+    txt(s, x, 4.1, cw4 - 0.15, 0.5, out, 8, NAVY, spacing=1.35)
+
+rect(s, M, 5.25, CW, 1.0, fill=PANEL, radius=0.04)
+txt(s, M + 0.28, 5.39, 3.0, 0.22, "判断标准  /  GATE", 8, BLUE, True, spc=120)
+txt(s, M + 0.28, 5.64, CW - 0.6, 0.5,
+    "每一阶段只做一件事：上一阶段的验收没过，不进入下一阶段；主数据唯一率 ≥ 99.5% 才允许谈联通。",
+    9.2, GRAY, spacing=1.35)
+
+# ================================================================== 12 closing
+s = prs.slides.add_slide(BLANK)
+dark_bg(s)
+logo(s, dark=True)
+txt(s, 1.0, 2.5, 8.0, 0.5, "谢谢关注", 34, WHITE, True, spacing=1.0)
+txt(s, 1.0, 3.22, 8.8, 0.4, "先对齐链路，再谈改造。", 18, RGBColor(0xBF, 0xCE, 0xE8), spacing=1.2)
+line(s, 1.02, 3.9, 3.0, 3.9, RGBColor(0x5B, 0x84, 0xD2), 1.2)
+txt(s, 1.0, 4.1, 8.4, 0.7, "12 个节点  ·  24 项核心数据  ·  四个系统\n一条链路，从签约走到项目利润。",
+    10.5, SUBTXT, spacing=1.7)
+txt(s, 1.0, 6.02, 10.0, 0.5, "服务热线  0755-86569152      www.iscmtech.com", 9,
+    RGBColor(0xA9, 0xB9, 0xD6), spc=30)
+txt(s, 1.0, 6.5, 10.0, 0.3, "链宇技术  ·  2026 内部讨论稿  ·  请勿外传", 8,
+    RGBColor(0x7E, 0x92, 0xB8), spc=40)
+
+out = "/workspace/链宇技术-业务链路与核心数据-讨论稿.pptx"
+prs.save(out)
+print("saved", out, len(prs.slides._sldIdLst))
