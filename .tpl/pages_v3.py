@@ -349,36 +349,66 @@ txt(s, M + 0.24, 6.32, CW - 0.5, 0.3,
 # ================================================================== 14 section 04
 section("04", "未来规划", "从梳理到智能体，分三步走。", 14)
 
-# ================================================================== 15 路线图
+# ================================================================== 15 未来规划（时间轴）
 s = prs.slides.add_slide(BLANK)
-chrome(s, "短期打底，中期联通，长期智能", 15, "顺序不能反：系统各自跑不顺，联通就是放大混乱")
-phases = [
-    ("01", "梳理数据与 Owner", "定 18 个模块的核心数据、责任人、口径与编码规则；出 12 个节点的字段对照表。", "验收：清单签字，口径唯一"),
-    ("02", "落到系统，各自跑顺", "四套系统各自补齐字段与校验，先做到单系统内闭环、数据可导出。", "验收：单系统月结不靠手工补"),
-    ("03", "数据联通", "统一主键与映射表，打通合同—项目—工时—结算—开票—回款。", "验收：一条链路可追溯"),
-    ("04", "CEO 智能体", "在联通数据上做经营问答、预警与预测，替代人工汇总。", "验收：问题当天有答案"),
+chrome(s, "未来规划", 15, "短期打底，中期联通，长期智能：每一阶段验收通过，再进入下一阶段")
+
+X0, X1 = M, W - M
+MW = (X1 - X0) / 12
+AX = 4.38
+
+for i in range(13):
+    xx = X0 + i * MW
+    line(s, xx, 1.9, xx, 6.25, RGBColor(0xDF, 0xE7, 0xF3), 0.5, dash=MSO_LINE.DASH)
+
+line(s, X0, AX, X1 - 0.18, AX, RGBColor(0x8A, 0x93, 0xA3), 1.0)
+arrow(s, X1 - 0.3, AX, X1, AX, color=RGBColor(0x8A, 0x93, 0xA3), lw=1.0)
+
+for i in range(12):
+    cx = X0 + (i + 0.5) * MW
+    bx = X0 + i * MW
+    line(s, bx, AX - 0.04, bx, AX + 0.04, RGBColor(0x8A, 0x93, 0xA3), 0.6)
+    if (i + 1) % 2 == 1:
+        txt(s, cx - 0.25, AX - 0.24, 0.5, 0.16, f"{i+1}月", 6.8, MUTED, align=PP_ALIGN.CENTER)
+    else:
+        txt(s, cx - 0.25, AX + 0.08, 0.5, 0.16, f"{i+1}月", 6.8, MUTED, align=PP_ALIGN.CENTER)
+
+groups = [
+    ("短期", 0, 3, "第 1–3 月", NAVY),
+    ("中期", 3, 6, "第 4–6 月", BLUE),
+    ("长期", 6, 12, "第 7–12 月", RGBColor(0x5B, 0x84, 0xD2)),
 ]
-cw4 = (CW - 3 * 0.18) / 4
-axis = [("短期  ·  0–3 个月", 0, 2, NAVY), ("中期  ·  3–6 个月", 2, 1, BLUE),
-        ("长期  ·  6–12 个月", 3, 1, RGBColor(0x5B, 0x84, 0xD2))]
-for label, idx, span, col in axis:
-    x = M + idx * (cw4 + 0.18)
-    w_ = span * cw4 + (span - 1) * 0.18
-    rect(s, x, 1.42, w_, 0.32, fill=col, radius=0.2)
-    txt(s, x, 1.48, w_, 0.2, label, 8, WHITE, True, align=PP_ALIGN.CENTER, spc=60)
-for i, (n, t, d, out) in enumerate(phases):
-    x = M + i * (cw4 + 0.18)
-    rect(s, x, 1.94, 0.38, 0.26, fill=PANEL, radius=0.12)
-    txt(s, x, 1.985, 0.38, 0.18, n, 7.8, NAVY, True, align=PP_ALIGN.CENTER, spc=40)
-    txt(s, x, 2.34, cw4 - 0.1, 0.55, t, 12.5, BLACK, True, spacing=1.15)
-    txt(s, x, 2.92, cw4 - 0.15, 1.3, d, 8.5, GRAY, spacing=1.55)
-    line(s, x, 4.0, x + cw4 - 0.15, 4.0, HAIR, 0.6)
-    txt(s, x, 4.1, cw4 - 0.15, 0.5, out, 8, NAVY, spacing=1.35)
-rect(s, M, 5.25, CW, 1.0, fill=PANEL, radius=0.04)
-txt(s, M + 0.28, 5.39, 3.0, 0.22, "判断标准  /  GATE", 8, BLUE, True, spc=120)
-txt(s, M + 0.28, 5.64, CW - 0.6, 0.5,
-    "每一阶段只做一件事：上一阶段的验收没过，不进入下一阶段；核心数据唯一率 ≥ 99.5% 才允许谈联通。",
-    9.2, GRAY, spacing=1.35)
+for name, a, b, span_txt, col in groups:
+    xa, xb = X0 + a * MW, X0 + b * MW
+    line(s, xa, 1.72, xb - 0.04, 1.72, col, 1.0)
+    line(s, xa, 1.67, xa, 1.77, col, 1.0)
+    line(s, xb - 0.04, 1.67, xb - 0.04, 1.77, col, 1.0)
+    txt(s, xa + 0.04, 1.47, 3.0, 0.2, f"{name}  ·  {span_txt}", 7.4, col, True, spc=40)
+
+phases = [
+    ("01", "梳理数据与 Owner", 0, 2, 2.30, NAVY,
+     "定 18 个模块的核心数据、责任人与编码规则。", "验收：清单签字，口径唯一"),
+    ("02", "落到系统，各自跑顺", 1, 3, 3.40, NAVY,
+     "四套系统补齐字段与校验，先做到单系统闭环。", "验收：单月结账不靠手工补"),
+    ("03", "数据联通", 3, 6, 5.06, BLUE,
+     "统一主键与映射表，打通合同到回款。", "验收：一条链路可追溯"),
+    ("04", "CEO 智能体", 6, 12, 6.06, RGBColor(0x5B, 0x84, 0xD2),
+     "在联通数据上做问答、预警与预测。", "验收：经营问题当天有答案"),
+]
+for num, name, a, b, by, col, desc, acc in phases:
+    xb = X0 + a * MW
+    xe = X0 + b * MW
+    rect(s, xb, by, xe - xb, 0.06, fill=col)
+    rect(s, xb - 0.055, by - 0.025, 0.11, 0.11, fill=col, shape=MSO_SHAPE.OVAL)
+    txt(s, xb, by - 0.31, 0.34, 0.2, num, 7.4, col, True)
+    txt(s, xb + 0.32, by - 0.35, 3.6, 0.26, name, 10.5, BLACK, True, spacing=1.0)
+    w_ = min(max(xe - xb + 1.2, 2.6), X1 - xb - 0.05)
+    txt(s, xb, by + 0.14, w_, 0.24, desc, 7.8, GRAY, spacing=1.3)
+    txt(s, xb, by + 0.38, w_, 0.2, acc, 7.2, col, spacing=1.3)
+
+txt(s, M, 6.62, CW, 0.24,
+    "以 12 个月为窗口；上一阶段验收未过，不进入下一阶段。核心数据唯一率 ≥ 99.5% 才允许谈联通。",
+    8, MUTED)
 
 # ================================================================== 16 closing
 s = prs.slides.add_slide(BLANK)
